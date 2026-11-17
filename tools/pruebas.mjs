@@ -314,6 +314,36 @@ async function main() {
   t((await SN('portal/rider/' + evK)).s === 404, 'no ve riders de eventos donde no está');
   t((await Bc('riders/' + rid)).s === 404 && (await Bc('riders')).j.length === 0 && (await Bc('eventos/' + ev1 + '/tecnico')).s === 404, 'la empresa B no ve los riders de A');
 
+  titulo('Reportes y presupuesto (Fase 6)');
+  t((await K('reportes')).s === 403 && (await K('reportes/ventas')).s === 403, 'el booking no ve los reportes (permiso reportes.ver)');
+  r = await A('reportes'); t(r.s === 200 && Object.keys(r.j.reportes).length === 7 && r.j.exportar === true, 'catálogo de reportes y filtros');
+  const rango = `desde=${dia(-400)}&hasta=${dia(400)}`;
+  r = await A(`reportes/ventas?${rango}&agrupar=anio`);
+  const evDb = sql(`SELECT moneda, SUM(precio_c) c, COUNT(*) n FROM eventos WHERE empresa_id = (SELECT empresa_id FROM eventos WHERE id = ${ev1}) AND estado != 'cancelado' GROUP BY moneda`);
+  t(evDb.every((x) => { const tt = r.j.totales.find((y) => y.moneda === x.moneda); return tt && Math.abs(tt.contratado - x.c / 100) < 0.01 && tt.eventos === x.n; }), 'ventas cuadran con los eventos de origen, por moneda', { tot: r.j.totales, evDb });
+  t(new Set(r.j.totales.map((x) => x.moneda)).size === r.j.totales.length && /no se suman/.test(r.j.criterio), 'cada moneda va por separado');
+  r = await A(`reportes/ventas?${rango}&agrupar=mes&banda=${bandaId}&tipo=privado`); t(r.s === 200 && r.j.grafico && r.j.filas.every((f) => f.grupo), 'ventas por mes con filtros de banda y tipo');
+  r = await A(`reportes/rentabilidad?${rango}&agrupar=evento&evento=${ev1}`); const cu = await A('eventos/' + ev1 + '/cuadre');
+  t(r.j.filas.length === 1 && Math.abs(r.j.filas[0].resultado - cu.j.calculo.resultado) < 0.01, 'la rentabilidad del evento es la misma del cuadre', { rep: r.j.filas[0], cu: cu.j.calculo.resultado });
+  r = await A(`reportes/gastos?${rango}&agrupar=clase`); t(r.s === 200 && r.j.filas.some((f) => f.grupo === 'Nómina de músicos'), 'gastos incluyen nómina pagada y gastos generales');
+  const gDb = sql(`SELECT moneda, SUM(monto_c) c FROM movimientos WHERE empresa_id = (SELECT empresa_id FROM eventos WHERE id = ${ev1}) AND anulado = 0 AND tipo IN ('gasto','nomina','comision') AND NOT (tipo = 'gasto' AND IFNULL(cubierto_por,'') = 'cliente') GROUP BY moneda`);
+  t(gDb.every((x) => Math.abs(r.j.totales.find((y) => y.moneda === x.moneda).total - x.c / 100) < 0.01), 'los gastos cuadran con los movimientos (sin lo que pagó el cliente)', { tot: r.j.totales, gDb });
+  r = await A(`reportes/pagos?${rango}&agrupar=musico`); t(r.s === 200 && r.j.filas.length >= 1 && r.j.filas[0].pagos >= 1, 'pagos por músico');
+  r = await A(`reportes/pagos?${rango}&agrupar=pendientes`); t(r.s === 200 && r.j.filas.every((f) => f.pendiente > 0), 'pagos pendientes y parciales');
+  r = await A(`reportes/cobros?${rango}&agrupar=antiguedad`); t(r.s === 200 && r.j.columnas.some((c) => c.k === 'por_cobrar'), 'cuentas por cobrar por antigüedad');
+  r = await A(`reportes/control?${rango}`); t(r.s === 200 && r.j.filas.some((f) => /Sin comprobante|Anulado/.test(f.problema)), 'control de comprobantes y entregas');
+  await A('tasas', { method: 'POST', body: { de: 'DOP', a: 'USD', tasa: '0.0166', fecha: dia(-400) } });
+  r = await A(`reportes/ventas?${rango}&agrupar=anio&consolidar=1`); t(r.j.consolidado && r.j.consolidado.moneda === 'USD' && r.j.consolidado.contratado > 0 && /Consolidado en USD/.test(r.j.criterio) && (r.j.totales.every((x) => x.moneda === 'USD') || r.j.tasas_usadas.length >= 1), 'consolida en la moneda base y muestra la tasa usada', r.j.consolidado);
+  r = await A(`reportes/ventas?${rango}&formato=xlsx`); t(r.s === 200 && r.j._tipo.includes('spreadsheetml') && r.j._bytes > 1500, 'exporta a Excel (.xlsx)', r.j);
+  t((await K(`reportes/ventas?formato=xlsx`)).s === 403, 'sin permiso no exporta');
+  t(sql("SELECT COUNT(*) n FROM auditoria WHERE accion = 'reporte_exportado'")[0].n === 1, 'cada exportación queda en la bitácora');
+  t((await A(`reportes/ventas?desde=${dia(5)}&hasta=${dia(1)}`)).s === 400 && (await A('reportes/nada')).s === 404, 'valida fechas y nombres de reporte');
+  t((await A('eventos/' + ev1 + '/presupuesto', { method: 'PUT', body: { nomina: '30000', comisiones: '500', viajes: '1200', otros: '0', notas: 'Estimado antes de confirmar' } })).s === 200, 'guarda el presupuesto estimado del evento');
+  r = await A('eventos/' + ev1 + '/presupuesto'); t(r.j.presupuesto.nomina === 30000 && r.j.real && typeof r.j.real.resultado === 'number', 'compara presupuesto con lo real');
+  r = await A(`reportes/presupuesto?${rango}`); t(r.j.filas.length === 1 && r.j.filas[0].est_nomina === 30000 && typeof r.j.filas[0].diferencia === 'number', 'reporte de presupuesto frente a resultado real');
+  r = await Bc(`reportes/ventas?${rango}`); t(r.s === 200 && r.j.filas.length === 0, 'la empresa B no ve las cifras de A');
+  t((await Bc('eventos/' + ev1 + '/presupuesto')).s === 404, 'ni su presupuesto');
+
   titulo('Plataforma, suspensión y prueba vencida');
   t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
   r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j);

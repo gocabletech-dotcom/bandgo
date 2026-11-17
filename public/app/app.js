@@ -172,10 +172,10 @@ const MENU = [
   { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales']] },
   { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 0, 'viajes.ver'], ['itinerarios', 'Itinerarios', 'map', 0, 'viajes.ver'], ['rider', 'Rider técnico', 'rider', 0, 'rider.ver']] },
   { g: 'Comunicación', i: [['comunicados', 'Comunicados y chat', 'chat', 7]] },
-  { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 6], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
+  { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 0, 'reportes.ver'], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { reportes: 'Reportes', rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
   const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
@@ -198,7 +198,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b, x) {
-  const V = { rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { reportes: vReportes, rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b, x); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }

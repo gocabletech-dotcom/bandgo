@@ -179,3 +179,4 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 .itfila{grid-template-columns:64px 36px 1fr auto}@media (max-width:600px){.itfila{grid-template-columns:48px 32px 1fr;gap:8px}.itfila>div:last-child{grid-column:3}}
 @media print{.hoja-rider svg{max-height:15cm}.hoja-rider section{break-inside:avoid}.rider-t td,.rider-t th{padding:4px 8px!important;font-size:11px}}
+.solo-print{display:none}@media print{.solo-print{display:block}}
