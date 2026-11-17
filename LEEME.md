@@ -8,7 +8,7 @@ Doble clic en **`tools/Publicar BandGo.bat`**. Hace todo: baja de GitHub, instal
 crea la base `bandgo-db` y el bucket `bandgo-archivos` la primera vez, respalda, migra, publica y crea la llave de cifrado.
 Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
-## Qué hay (v0.6 · Fases 0 a 6)
+## Qué hay (v0.7 · Fases 0 a 7)
 - **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (obligatorio para la plataforma),
   frenos por conexión, Turnstile, avisos de seguridad, cifrado AES-GCM, bitácora, errores, Plataforma (empresas, planes, ajustes, errores),
   varias empresas por usuario, roles (dueño, admin, manager, booking, músico, sonidista, promotor) y permisos por acción que el dueño puede cambiar.
@@ -54,8 +54,14 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
   consolidado en la moneda base con la tasa registrada (y se muestra cuál). Gráfico por moneda, exportación a Excel
   (.xlsx) y PDF; cada exportación queda en la bitácora. En la pestaña Finanzas del evento: presupuesto estimado.
 
+- **Fase 7 · comunicados y chat:** comunicados oficiales a todos, una banda, el equipo de un evento, la delegación de una
+  gira o personas escogidas (urgente, fijado, adjunto, «Enterado»), con quién leyó y quién confirmó, recordatorio a los
+  que faltan por correo y WhatsApp, y retiro con constancia. Chat por banda (se crean solos), por evento y por gira
+  (botón en su ficha), directos y grupos; fotos y PDF, responder citando, editar 15 minutos, borrar (la oficina puede
+  ocultar con constancia en la bitácora), canales «solo la oficina escribe» y archivados; insignias de no leídos.
+  En el portal, la pestaña «Mensajes» (Avisos y Chat); «Mis documentos» pasó a Perfil.
+
 ## Lo que sigue
 
-Fase 7 comunicados y chat. La red interna con fotos (muro) queda en pausa hasta nuevo aviso.
-
-Detalles técnicos: `docs/TECNICO.md`.
+La red interna con fotos (muro) queda en pausa hasta nuevo aviso. Opcional: chat en tiempo real con Durable Objects
+(requiere el plan pago de Workers, 5 USD al mes); hoy se actualiza consultando cada 4 segundos sin costo extra.

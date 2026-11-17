@@ -10,10 +10,11 @@ import { rutasFinanzas } from './finanzas.js';
 import { rutasViajes } from './viajes.js';
 import { rutasRider } from './rider.js';
 import { rutasReportes, rutasPresupuesto } from './reportes.js';
+import { rutasComunicacion, accesoAdjunto } from './comunicacion.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
-const TIPOS_ARCHIVO = { logo_empresa: 'img', logo_banda: 'img', foto_musico: 'img', documento: 'doc' };
+const TIPOS_ARCHIVO = { logo_empresa: 'img', logo_banda: 'img', foto_musico: 'img', documento: 'doc', adjunto: 'doc' };
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 
 async function cuentaEmpresa(db, e) {
@@ -152,7 +153,7 @@ async function api(req, env, url, ectx) {
   if (mod === 'archivos' && method === 'POST') {
     const tipo = d.tipo, clase = TIPOS_ARCHIVO[tipo]; if (!clase) return err('Tipo de archivo no válido');
     const yo = ROLES_PORTAL.includes(rol);
-    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo || puede('finanzas.registrar') || puede('gastos.generales') || puede('nomina.pagar') || puede('viajes.editar') }[tipo];
+    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo || puede('finanzas.registrar') || puede('gastos.generales') || puede('nomina.pagar') || puede('viajes.editar') , adjunto: yo || puede('chat.usar') || puede('comunicados.enviar') }[tipo];
     if (!ok) return err('Su rol no tiene permiso para subir este archivo', 403);
     const m = /^data:([a-z/+.-]+);base64,(.+)$/i.exec(String(d.datos || '')); if (!m) return err('Archivo no válido');
     const mime = m[1].toLowerCase(), ext = MIME_EXT[mime];
@@ -184,6 +185,7 @@ async function api(req, env, url, ectx) {
         if (vj) ok = puede('viajes.ver') || !!(await db.prepare('SELECT 1 FROM tramo_pasajeros p JOIN tramos t ON t.id = p.tramo_id JOIN musicos m ON m.id = p.musico_id WHERE m.usuario_id = ? AND (p.archivo_r2 = ? OR (t.archivo_r2 = ? AND p.archivo_r2 IS NULL))').bind(user.id, clave, clave).first()); }
       if (ok && esDoc) await auditar(ctx, 'documento_descargado', 'archivo', null, clave);
     }
+    if (!ok && a.tipo === 'adjunto') ok = a.creado_por === user.id || (await accesoAdjunto(L, clave));
     if (!ok) return err('Sin permiso', 403);
     const o = await env.ARCHIVOS.get(clave); if (!o) return err('No encontrado', 404);
     return new Response(o.body, { headers: { 'content-type': a.mime, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-disposition': a.mime === 'application/pdf' ? 'inline' : 'inline' } });
@@ -204,6 +206,8 @@ async function api(req, env, url, ectx) {
     return json((await db.prepare('SELECT a.accion, a.recurso, a.recurso_id, a.detalle, a.creado, u.nombre AS usuario FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = ? ORDER BY a.id DESC LIMIT 200').bind(empresa.id).all()).results);
   }
 
+  const rc = await rutasComunicacion(L);
+  if (rc) return rc;
   const rp = (await rutasReportes(L)) || (await rutasPresupuesto(L));
   if (rp) return rp;
   const rr = await rutasRider(L);

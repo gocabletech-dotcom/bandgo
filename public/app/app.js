@@ -39,7 +39,7 @@ const IC = {
   band: 'M12 3a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4zM5 11a7 7 0 0 0 14 0M12 18v3', users: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8',
   money: 'M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6', wallet: 'M3 7h18v12H3zM3 7l2-3h12l2 3M16 13h2', check: 'M9 11l3 3 8-8M20 12v7H4V5h11',
   receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6', plane: 'M10 14L3 11l1-2 8 1 5-6a2 2 0 0 1 3 3l-6 5 1 8-2 1-3-7', map: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15',
-  rider: 'M6 4h12v16H6zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 7h.01', chat: 'M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z', chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  rider: 'M6 4h12v16H6zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 7h.01', mega: 'M3 10v4h3l6 4V6L6 10zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12', chat: 'M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z', chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1', key: 'M15 7a4 4 0 1 1-3.9 5H3v3H0M15 7h.01',
   shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', doc: 'M4 4h16v16H4zM8 9h8M8 13h5', menu: 'M3 6h18M3 12h18M3 18h18',
   out: 'M9 21H5V3h4M16 17l5-5-5-5M21 12H9', cam: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -59,13 +59,13 @@ async function reducir(file, max, mime) {
 }
 function elegirArchivo(tipo) {
   return new Promise((ok) => {
-    const i = document.createElement('input'); i.type = 'file'; i.accept = tipo === 'documento' ? 'image/*,application/pdf' : 'image/*';
+    const i = document.createElement('input'); i.type = 'file'; i.accept = tipo === 'documento' || tipo === 'adjunto' ? 'image/*,application/pdf' : 'image/*';
     i.onchange = async () => {
       const f = i.files[0]; if (!f) return ok(null);
       try {
         let datos;
         if (f.type === 'application/pdf') { if (f.size > 4e6) throw new Error('El PDF es muy grande (máximo 4 MB)'); datos = await leerComo(f); }
-        else datos = await reducir(f, tipo === 'documento' ? 1800 : tipo === 'foto_musico' ? 600 : 700, tipo.startsWith('logo') && f.type === 'image/png' ? 'image/png' : 'image/jpeg');
+        else datos = await reducir(f, tipo === 'documento' || tipo === 'adjunto' ? 1800 : tipo === 'foto_musico' ? 600 : 700, tipo.startsWith('logo') && f.type === 'image/png' ? 'image/png' : 'image/jpeg');
         ok(await api('archivos', { method: 'POST', body: { tipo, datos } }));
       } catch (e) { falla(e); ok(null); }
     };
@@ -86,7 +86,7 @@ async function pintar() {
   if (r0 === 'registro') return vistaRegistro();
   if (r0 === 'olvide') return vistaOlvide();
   if (r0 === 'setup') return vistaSetup();
-  if (!ME) { try { ME = await api('me', { publico: true }); } catch { ME = null; } }
+  if (!ME) { try { ME = await api('me', { publico: true }); } catch { ME = null; } if (ME && typeof arrancarPendientes === 'function') setTimeout(arrancarPendientes, 800); }
   if (!ME) {
     try { const s = await api('setup', { publico: true }); if (s.necesita_setup) return vistaSetup(); } catch {}
     return vistaLogin();
@@ -171,11 +171,11 @@ const MENU = [
   { g: 'Equipo', i: [['bandas', 'Bandas', 'band', 0, 'bandas.ver'], ['integrantes', 'Integrantes', 'users', 0, 'musicos.ver']] },
   { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales']] },
   { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 0, 'viajes.ver'], ['itinerarios', 'Itinerarios', 'map', 0, 'viajes.ver'], ['rider', 'Rider técnico', 'rider', 0, 'rider.ver']] },
-  { g: 'Comunicación', i: [['comunicados', 'Comunicados y chat', 'chat', 7]] },
+  { g: 'Comunicación', i: [['comunicados', 'Comunicados', 'mega', 0, 'comunicados.ver'], ['chat', 'Chat', 'chat', 0, 'chat.usar']] },
   { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 0, 'reportes.ver'], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { reportes: 'Reportes', rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { comunicados: 'Comunicados', chat: 'Chat', reportes: 'Reportes', rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
   const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
@@ -198,7 +198,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b, x) {
-  const V = { reportes: vReportes, rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { comunicados: vComunicados, chat: vChat, reportes: vReportes, rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b, x); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
@@ -456,7 +456,7 @@ async function portal(sec, arg, arg2) {
   let P; try { P = await api('portal'); } catch (e) { $('#root').innerHTML = `<div class="portal"><div class="p-cab">${marca}</div><div class="p-cuerpo" style="margin-top:16px"><div class="aviso adv">${esc(e.message)}</div><button class="btn" id="sl">Cerrar sesión</button></div></div>`; $('#sl').onclick = salir; return; }
   const m = P.musico;
   const tecnico = ME.rol === 'sonidista' || ['sonidista', 'tecnico'].includes(m.tipo);
-  const tabs = [['inicio', 'Inicio', 'home'], ['agenda', 'Agenda', 'cal'], ...(tecnico ? [['tecnico', 'Técnico', 'rider']] : []), ['documentos', 'Documentos', 'doc'], ['pago', 'Pagos', 'wallet'], ['perfil', 'Perfil', 'users']];
+  const tabs = [['inicio', 'Inicio', 'home'], ['agenda', 'Agenda', 'cal'], ...(tecnico ? [['tecnico', 'Técnico', 'rider']] : []), ['mensajes', 'Mensajes', 'chat'], ['pago', 'Pagos', 'wallet'], ['perfil', 'Perfil', 'users']];
   $('#root').innerHTML = `<div class="portal"><div class="p-cab">${fotoAv(m.foto_url, m.nombre, 'm')}<div style="flex:1"><div class="peq" style="color:#CBD5E1">Hola,</div><div style="font-family:var(--f-tit);font-size:21px;font-weight:700">${esc(m.nombre)}</div></div><span class="tag" style="background:var(--morado);color:#fff">${esc(P.empresa.nombre)}</span></div>
     <div class="p-cuerpo" id="pc"></div><nav class="p-tabs" aria-label="Menú del portal" style="grid-template-columns:repeat(${tabs.length},minmax(0,1fr))">${tabs.map(([k, t, i]) => `<a href="#/${k}" class="${k === sec ? 'act' : ''}"><span class="i">${ico(i, 20)}</span>${t}</a>`).join('')}</nav></div>`;
   const pc = $('#pc');
@@ -473,6 +473,7 @@ async function portal(sec, arg, arg2) {
   }
   if (sec === 'recibo' && arg) return vRecibo(pc, arg);
   if (sec === 'tecnico' && tecnico) return portalTecnico(pc, arg, arg2);
+  if (sec === 'mensajes') return portalMensajes(pc, arg, arg2);
   if (sec === 'documentos') pintarDocs(pc, P.documentos, true, (d, id) => api('portal/documentos' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: d }), null, () => portal('documentos'));
   if (sec === 'pago') { pc.innerHTML = '<div id="mp" style="display:flex;flex-direction:column;gap:12px"></div><div id="dp"></div>'; await portalPagos($('#mp')); pintarPago($('#dp'), P.cuenta_pago, true, (d) => api('portal/cuenta-pago', { method: 'PUT', body: d }), () => portal('pago')); return; }
   if (sec === 'perfil') {
@@ -481,7 +482,7 @@ async function portal(sec, arg, arg2) {
       <label class="campo">Teléfono<input name="telefono" inputmode="tel" value="${esc(m.telefono || '')}"></label><label class="campo">WhatsApp<input name="whatsapp" inputmode="tel" value="${esc(m.whatsapp || '')}"></label>
       <label class="campo">Fecha de nacimiento<input type="date" name="nacimiento" value="${esc(m.nacimiento || '')}"></label><label class="campo">Dirección<input name="direccion" value="${esc(m.direccion || '')}"></label><label class="campo">País de residencia<input name="pais_residencia" value="${esc(m.pais_residencia || '')}"></label>
       <label class="campo">Contacto de emergencia<input name="emergencia_nombre" value="${esc(m.emergencia_nombre || '')}"></label><label class="campo">Teléfono de emergencia<input name="emergencia_telefono" inputmode="tel" value="${esc(m.emergencia_telefono || '')}"></label>
-      <button class="btn prim bloque">Guardar</button><button type="button" class="btn bloque" id="sl">Cerrar sesión</button></form>`;
+      <button class="btn prim bloque">Guardar</button><a class="btn bloque" href="#/documentos">${ico('doc')} Mis documentos de viaje</a><button type="button" class="btn bloque" id="sl">Cerrar sesión</button></form>`;
     $('#sf').onclick = async () => { const r = await elegirArchivo('foto_musico'); if (r) { foto = r.clave; $('#ft').innerHTML = `<img class="av g" src="${esc(r.url)}" alt="">`; } };
     $('#sl').onclick = salir;
     $('#f').onsubmit = (ev) => { ev.preventDefault(); trabajando($('button.prim', ev.target), async () => { await api('portal/perfil', { method: 'PUT', body: { ...datosDe(ev.target), ...(foto ? { foto } : {}) } }); toast('Guardado'); portal('perfil'); }); };

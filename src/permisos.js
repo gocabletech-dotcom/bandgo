@@ -70,6 +70,10 @@ export const PERMISOS_CAT = {
   'rider.descargar': 'Imprimir o descargar el rider en PDF',
   'reportes.ver': 'Ver reportes de ventas, gastos, pagos y rentabilidad',
   'reportes.exportar': 'Exportar reportes a Excel y PDF',
+  'comunicados.ver': 'Ver los comunicados y quién los leyó',
+  'comunicados.enviar': 'Enviar, recordar y retirar comunicados',
+  'chat.usar': 'Usar el chat (bandas, eventos, giras, directos y grupos)',
+  'chat.moderar': 'Ver todas las conversaciones, ocultar mensajes y archivar',
 };
 const TODOS = Object.keys(PERMISOS_CAT);
 export const FABRICA = {
@@ -77,8 +81,8 @@ export const FABRICA = {
   admin: TODOS.filter((p) => !['permisos.editar', 'cuadres.aprobar', 'finanzas.confirmar'].includes(p)), // el blueprint: el admin no aprueba liquidaciones sin permiso específico
   manager: ['empresa.ver', 'usuarios.ver', 'bandas.ver', 'bandas.crear', 'bandas.editar', 'musicos.ver', 'musicos.crear', 'musicos.editar', 'documentos.ver', 'documentos.editar', 'pagos.ver', 'auditoria.ver',
     'clientes.ver', 'clientes.editar', 'eventos.ver', 'eventos.crear', 'eventos.editar', 'eventos.editar_todos', 'eventos.ver_montos', 'eventos.excepcion', 'contratos.ver', 'contratos.editar', 'ensayos.ver', 'ensayos.editar', 'ensayos.publicar', 'bloqueos.editar',
-    'finanzas.ver', 'finanzas.registrar', 'finanzas.anular', 'gastos.generales', 'tasas.editar', 'nomina.ver', 'nomina.editar', 'nomina.pagar', 'comisiones.ver', 'comisiones.editar', 'cuadres.enviar', 'cuadres.revisar', 'viajes.ver', 'viajes.editar', 'viajes.publicar', 'rider.ver', 'rider.editar', 'rider.descargar', 'reportes.ver', 'reportes.exportar'],
-  booking: ['empresa.ver', 'bandas.ver', 'musicos.ver', 'clientes.ver', 'clientes.editar', 'eventos.ver', 'eventos.crear', 'eventos.editar', 'contratos.ver', 'contratos.editar', 'ensayos.ver', 'finanzas.registrar', 'cuadres.enviar', 'viajes.ver', 'rider.ver', 'rider.descargar'],
+    'finanzas.ver', 'finanzas.registrar', 'finanzas.anular', 'gastos.generales', 'tasas.editar', 'nomina.ver', 'nomina.editar', 'nomina.pagar', 'comisiones.ver', 'comisiones.editar', 'cuadres.enviar', 'cuadres.revisar', 'viajes.ver', 'viajes.editar', 'viajes.publicar', 'rider.ver', 'rider.editar', 'rider.descargar', 'reportes.ver', 'reportes.exportar', 'comunicados.ver', 'comunicados.enviar', 'chat.usar', 'chat.moderar'],
+  booking: ['empresa.ver', 'bandas.ver', 'musicos.ver', 'clientes.ver', 'clientes.editar', 'eventos.ver', 'eventos.crear', 'eventos.editar', 'contratos.ver', 'contratos.editar', 'ensayos.ver', 'finanzas.registrar', 'cuadres.enviar', 'viajes.ver', 'rider.ver', 'rider.descargar', 'comunicados.ver', 'chat.usar'],
   musico: [],
   sonidista: [],
   promotor: [],
