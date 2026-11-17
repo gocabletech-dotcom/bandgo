@@ -7,6 +7,7 @@ import { rutasPersonal, invitar } from './personal.js';
 import { rutasPlataforma } from './plataforma.js';
 import { rutasAgenda } from './agenda.js';
 import { rutasFinanzas } from './finanzas.js';
+import { rutasViajes } from './viajes.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
@@ -149,7 +150,7 @@ async function api(req, env, url, ectx) {
   if (mod === 'archivos' && method === 'POST') {
     const tipo = d.tipo, clase = TIPOS_ARCHIVO[tipo]; if (!clase) return err('Tipo de archivo no válido');
     const yo = ROLES_PORTAL.includes(rol);
-    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo }[tipo];
+    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo || puede('finanzas.registrar') || puede('gastos.generales') || puede('nomina.pagar') || puede('viajes.editar') }[tipo];
     if (!ok) return err('Su rol no tiene permiso para subir este archivo', 403);
     const m = /^data:([a-z/+.-]+);base64,(.+)$/i.exec(String(d.datos || '')); if (!m) return err('Archivo no válido');
     const mime = m[1].toLowerCase(), ext = MIME_EXT[mime];
@@ -171,8 +172,15 @@ async function api(req, env, url, ectx) {
     let ok = a.tipo === 'logo_empresa' || a.tipo === 'logo_banda';
     if (!ok && a.tipo === 'foto_musico') ok = puede('musicos.ver') || !!(await db.prepare('SELECT 1 FROM musicos WHERE foto_r2 = ? AND usuario_id = ? AND empresa_id = ?').bind(clave, user.id, empresa.id).first()) || !!(await db.prepare('SELECT 1 FROM musicos m JOIN banda_miembros x ON x.musico_id = m.id JOIN banda_miembros y ON y.banda_id = x.banda_id JOIN musicos yo ON yo.id = y.musico_id WHERE m.foto_r2 = ? AND yo.usuario_id = ? AND m.empresa_id = ?').bind(clave, user.id, empresa.id).first()) || a.creado_por === user.id;
     if (!ok && a.tipo === 'documento') {
-      ok = puede('documentos.descargar') || !!(await db.prepare('SELECT 1 FROM documentos_viaje dv JOIN musicos m ON m.id = dv.musico_id WHERE dv.archivo_r2 = ? AND m.usuario_id = ?').bind(clave, user.id).first()) || a.creado_por === user.id;
-      if (ok) await auditar(ctx, 'documento_descargado', 'archivo', null, clave);
+      const esDoc = !!(await db.prepare('SELECT 1 FROM documentos_viaje WHERE archivo_r2 = ? AND empresa_id = ?').bind(clave, empresa.id).first());
+      ok = (esDoc && puede('documentos.descargar')) || !!(await db.prepare('SELECT 1 FROM documentos_viaje dv JOIN musicos m ON m.id = dv.musico_id WHERE dv.archivo_r2 = ? AND m.usuario_id = ?').bind(clave, user.id).first()) || a.creado_por === user.id;
+      // comprobantes de cobros, gastos y pagos
+      if (!ok) { const mv = await db.prepare('SELECT m.tipo, m.musico_id, e.booking_id FROM movimientos m LEFT JOIN eventos e ON e.id = m.evento_id WHERE m.comprobante_r2 = ? AND m.empresa_id = ?').bind(clave, empresa.id).first();
+        if (mv) ok = puede('finanzas.ver') || (mv.booking_id === user.id && puede('finanzas.registrar')) || (mv.tipo === 'nomina' && (puede('nomina.ver') || !!(await db.prepare('SELECT 1 FROM musicos WHERE id = ? AND usuario_id = ?').bind(mv.musico_id, user.id).first()))); }
+      // boletos y reservas de viaje: la oficina con permiso, o el pasajero / huésped
+      if (!ok) { const vj = await db.prepare('SELECT 1 FROM tramos WHERE archivo_r2 = ? AND empresa_id = ? UNION ALL SELECT 1 FROM hoteles WHERE archivo_r2 = ? AND empresa_id = ? UNION ALL SELECT 1 FROM tramo_pasajeros p JOIN tramos t ON t.id = p.tramo_id WHERE p.archivo_r2 = ? AND t.empresa_id = ?').bind(clave, empresa.id, clave, empresa.id, clave, empresa.id).first();
+        if (vj) ok = puede('viajes.ver') || !!(await db.prepare('SELECT 1 FROM tramo_pasajeros p JOIN tramos t ON t.id = p.tramo_id JOIN musicos m ON m.id = p.musico_id WHERE m.usuario_id = ? AND (p.archivo_r2 = ? OR (t.archivo_r2 = ? AND p.archivo_r2 IS NULL))').bind(user.id, clave, clave).first()); }
+      if (ok && esDoc) await auditar(ctx, 'documento_descargado', 'archivo', null, clave);
     }
     if (!ok) return err('Sin permiso', 403);
     const o = await env.ARCHIVOS.get(clave); if (!o) return err('No encontrado', 404);
@@ -194,6 +202,8 @@ async function api(req, env, url, ectx) {
     return json((await db.prepare('SELECT a.accion, a.recurso, a.recurso_id, a.detalle, a.creado, u.nombre AS usuario FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = ? ORDER BY a.id DESC LIMIT 200').bind(empresa.id).all()).results);
   }
 
+  const rv = await rutasViajes(L);
+  if (rv) return rv;
   const ra = await rutasAgenda(L);
   if (ra) return ra;
   const rf = await rutasFinanzas(L);

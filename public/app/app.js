@@ -170,12 +170,12 @@ const MENU = [
   { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 0, 'eventos.ver'], ['clientes', 'Clientes', 'brief', 0, 'clientes.ver'], ['comisiones', 'Comisiones', 'pct', 0, 'comisiones.ver']] },
   { g: 'Equipo', i: [['bandas', 'Bandas', 'band', 0, 'bandas.ver'], ['integrantes', 'Integrantes', 'users', 0, 'musicos.ver']] },
   { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales']] },
-  { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 4], ['itinerarios', 'Itinerarios', 'map', 4], ['rider', 'Rider técnico', 'rider', 5]] },
+  { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 0, 'viajes.ver'], ['itinerarios', 'Itinerarios', 'map', 0, 'viajes.ver'], ['rider', 'Rider técnico', 'rider', 5]] },
   { g: 'Comunicación', i: [['comunicados', 'Comunicados y chat', 'chat', 7]] },
   { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 6], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
   const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
@@ -198,7 +198,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b) {
-  const V = { finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
@@ -463,10 +463,13 @@ async function portal(sec, arg) {
     const docs = P.documentos.filter((d) => d.alerta);
     pc.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:8px;box-shadow:0 6px 20px rgba(15,23,42,.1)"><div class="peq mut" style="font-weight:700;letter-spacing:1px">MIS BANDAS</div>${P.bandas.map((b) => `<div style="display:flex;gap:10px;align-items:center">${logoBanda(b, 'ch')}<b>${esc(b.nombre)}</b>${b.funcion ? `<span class="mut peq">· ${esc(b.funcion)}</span>` : ''}</div>`).join('') || '<span class="mut">Aún no está en una banda.</span>'}</div>
       ${docs.length ? docs.map((d) => `<div class="aviso ${d.alerta.nivel === 'aviso' ? 'adv' : 'mal'}"><b>${d.tipo === 'visa' ? 'Visa' : 'Pasaporte'} ${esc(d.pais || '')}</b>: ${d.alerta.dias < 0 ? 'vencido' : 'vence en ' + d.alerta.dias + ' días'}. <a href="#/documentos">Actualizar</a></div>`).join('') : '<div class="aviso ok">Sus documentos de viaje están al día.</div>'}
-      <div id="pa"></div>`;
-    portalProximo($('#pa'));
+      <div id="pv"></div><div id="pa"></div>`;
+    portalProximoViaje($('#pv')); portalProximo($('#pa'));
   }
-  if (sec === 'agenda') return portalAgenda(pc);
+  if (sec === 'agenda') {
+    pc.innerHTML = `<div class="segm" role="tablist" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#fff;border:1px solid var(--borde);border-radius:12px;padding:4px;box-shadow:0 6px 20px rgba(15,23,42,.08)">${[['', 'Presentaciones y ensayos'], ['itinerario', 'Mi itinerario']].map(([k, t]) => `<a href="#/agenda${k ? '/' + k : ''}" role="tab" style="text-align:center;padding:9px;border-radius:9px;font-weight:600;font-size:14px;text-decoration:none;${(arg || '') === k ? 'background:var(--tinta);color:#fff' : 'color:var(--texto2)'}">${t}</a>`).join('')}</div><div id="ag" style="display:flex;flex-direction:column;gap:12px"></div>`;
+    return arg === 'itinerario' ? portalItinerario($('#ag')) : portalAgenda($('#ag'));
+  }
   if (sec === 'recibo' && arg) return vRecibo(pc, arg);
   if (sec === 'documentos') pintarDocs(pc, P.documentos, true, (d, id) => api('portal/documentos' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: d }), null, () => portal('documentos'));
   if (sec === 'pago') { pc.innerHTML = '<div id="mp" style="display:flex;flex-direction:column;gap:12px"></div><div id="dp"></div>'; await portalPagos($('#mp')); pintarPago($('#dp'), P.cuenta_pago, true, (d) => api('portal/cuenta-pago', { method: 'PUT', body: d }), () => portal('pago')); return; }

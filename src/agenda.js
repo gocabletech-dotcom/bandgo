@@ -98,7 +98,7 @@ export async function rutasAgenda(L) {
     const e0 = no('eventos.ver') && no('ensayos.ver'); if (e0) return e0;
     const u = new URL(req.url), desde = fecha(u.searchParams.get('desde')) || hoy(), hasta = fecha(u.searchParams.get('hasta')) || sumarDias(desde, 42);
     const banda = Number(u.searchParams.get('banda')) || null;
-    const out = { eventos: [], ensayos: [], bloqueos: [] };
+    const out = { eventos: [], ensayos: [], bloqueos: [], viajes: [] };
     if (puede('eventos.ver')) {
       const rs = (await db.prepare(`SELECT e.*, b.nombre AS banda, c.nombre AS cliente, ub.nombre AS booking FROM eventos e LEFT JOIN bandas b ON b.id = e.banda_id LEFT JOIN clientes c ON c.id = e.cliente_id LEFT JOIN usuarios ub ON ub.id = e.booking_id
         WHERE e.empresa_id = ? AND e.fecha BETWEEN ? AND ? ${banda ? 'AND e.banda_id = ?' : ''} ORDER BY e.fecha, e.hora_show`).bind(...[E, desde, hasta, ...(banda ? [banda] : [])]).all()).results;
@@ -109,6 +109,8 @@ export async function rutasAgenda(L) {
         (SELECT COUNT(*) FROM ensayo_citados c WHERE c.ensayo_id = s.id) AS citados, (SELECT COUNT(*) FROM ensayo_citados c WHERE c.ensayo_id = s.id AND c.respuesta = 'voy') AS van
         FROM ensayos s LEFT JOIN bandas b ON b.id = s.banda_id WHERE s.empresa_id = ? AND s.fecha BETWEEN ? AND ? ${banda ? 'AND s.banda_id = ?' : ''} ${puede('ensayos.editar') ? '' : "AND s.estado = 'publicado'"} ORDER BY s.fecha, s.hora_inicio`).bind(...[E, desde, hasta, ...(banda ? [banda] : [])]).all()).results;
     }
+    if (puede('viajes.ver')) out.viajes = (await db.prepare(`SELECT t.id, t.tipo, t.sale_fecha AS fecha, t.sale_hora AS hora, t.origen, t.origen_ciudad, t.destino, t.destino_ciudad, t.compania, t.numero, t.viaje_id, t.evento_id, v.nombre AS viaje
+      FROM tramos t LEFT JOIN viajes v ON v.id = t.viaje_id LEFT JOIN eventos e ON e.id = t.evento_id WHERE t.empresa_id = ? AND t.sale_fecha BETWEEN ? AND ? ${banda ? 'AND (v.banda_id = ? OR e.banda_id = ?)' : ''} ORDER BY t.sale_fecha, t.sale_hora`).bind(...[E, desde, hasta, ...(banda ? [banda, banda] : [])]).all()).results;
     out.bloqueos = (await db.prepare('SELECT b.*, ba.nombre AS banda, m.nombre AS musico FROM bloqueos b LEFT JOIN bandas ba ON ba.id = b.banda_id LEFT JOIN musicos m ON m.id = b.musico_id WHERE b.empresa_id = ? AND b.activo = 1 AND b.hasta >= ? AND b.desde <= ?').bind(E, desde, hasta).all()).results;
     return json(out);
   }

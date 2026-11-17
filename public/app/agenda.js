@@ -3,7 +3,7 @@
 const ESTADOS = { cotizacion: 'Cotización', negociacion: 'Negociación', pendiente: 'Pendiente de confirmación', confirmado: 'Confirmado', anticipo: 'Anticipo recibido', pendiente_pago: 'Pendiente de pago', realizado: 'Evento realizado', en_cuadre: 'En proceso de cuadre', liquidado: 'Liquidado', cancelado: 'Cancelado' };
 const ESTADOS_MAN = Object.keys(ESTADOS).filter((k) => !['en_cuadre', 'liquidado'].includes(k));
 const COLOR_EST = { cotizacion: 'gr', negociacion: 'adv', pendiente: 'az', confirmado: 'ok', anticipo: 'ok', pendiente_pago: 'adv', realizado: 'gr', en_cuadre: 'mor', liquidado: 'gr', cancelado: 'mal' };
-const EST_CLASE = { ok: 'ok', av: 'adv', az: 'gr', gr: 'gr', mor: 'mor', mal: 'mal' };
+const EST_CLASE = { ok: 'ok', av: 'adv', adv: 'adv', az: 'gr', gr: 'gr', mor: 'mor', mal: 'mal' };
 const estTxt = (e) => `<span class="est ${EST_CLASE[COLOR_EST[e]] || 'gr'}">${esc(ESTADOS[e] || e)}</span>`;
 const hoyISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const sumar = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
@@ -59,6 +59,7 @@ async function vCalendario(c, mes) {
     const meter = (f, x) => (porDia[f] = porDia[f] || []).push(x);
     r.eventos.forEach((e) => meter(e.fecha, { k: 'e', o: e, html: `<a class="chip c-${COLOR_EST[e.estado]}" href="#/eventos/${e.id}" title="${esc(e.nombre)}">${esc((e.hora_show ? e.hora_show + ' ' : '') + e.nombre)}</a>` }));
     r.ensayos.forEach((s) => meter(s.fecha, { k: 's', o: s, html: `<a class="chip ${s.estado === 'cancelado' ? 'c-mal' : 'c-mor'}" href="#/ensayos/${s.id}" title="${esc(s.titulo)}">${esc((s.hora_inicio ? s.hora_inicio + ' ' : '') + (s.estado === 'borrador' ? '(borrador) ' : '') + s.titulo)}</a>` }));
+    (r.viajes || []).forEach((t) => meter(t.fecha, { k: 'v', o: t, html: `<a class="chip c-via" href="#/viajes/${t.viaje_id || ''}" title="${esc(t.compania || '')}">${esc((t.hora ? t.hora + ' ' : '') + '✈ ' + [t.origen_ciudad || t.origen, t.destino_ciudad || t.destino].filter(Boolean).join('→'))}</a>` }));
     const bloq = (f) => r.bloqueos.filter((b) => b.desde <= f && b.hasta >= f);
     const celdas = Array.from({ length: 42 }, (_, i) => sumar(ini, i));
     $('#calg').innerHTML = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => `<div class="dsem">${d}</div>`).join('') + celdas.map((f) => { const bl = bloq(f);
@@ -69,7 +70,8 @@ async function vCalendario(c, mes) {
       const items = porDia[f] || [], bl = bloq(f);
       $('#detdia').innerHTML = `<h2>${esc(diaTxt(f, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2>
         ${bl.map((b) => `<div class="aviso adv"><b>Bloqueado</b> · ${esc(b.alcance === 'global' ? 'toda la empresa' : b.pais || b.banda || b.musico)}${b.motivo ? '<br>' + esc(b.motivo) : ''}${puede('bloqueos.editar') ? `<br><button class="btn chico" data-qb="${b.id}" style="margin-top:6px">Habilitar otra vez</button>` : ''}</div>`).join('')}
-        ${items.map((x) => x.k === 'e' ? `<a class="card" style="padding:12px 14px;text-decoration:none;color:inherit" href="#/eventos/${x.o.id}"><b>${esc(x.o.nombre)}</b><div class="mut peq">${esc([horaTxt(x.o.hora_llegada, x.o.hora_fin), x.o.ciudad, x.o.banda].filter(Boolean).join(' · '))}</div><div style="margin-top:6px">${estTxt(x.o.estado)}${x.o.precio != null ? ` <span class="mono peq">${esc(dinero(x.o.precio, x.o.moneda))}</span>` : ''}</div></a>`
+        ${items.map((x) => x.k === 'v' ? `<a class="card" style="padding:12px 14px;text-decoration:none;color:inherit;border-left:3px solid #0E7490" href="${x.o.viaje_id ? '#/viajes/' + x.o.viaje_id : '#/eventos/' + x.o.evento_id + '/logistica'}"><b>✈ ${esc([x.o.origen_ciudad || x.o.origen, x.o.destino_ciudad || x.o.destino].filter(Boolean).join(' → '))}</b><div class="mut peq">${esc([x.o.hora, x.o.compania, x.o.numero, x.o.viaje].filter(Boolean).join(' · '))}</div></a>`
+          : x.k === 'e' ? `<a class="card" style="padding:12px 14px;text-decoration:none;color:inherit" href="#/eventos/${x.o.id}"><b>${esc(x.o.nombre)}</b><div class="mut peq">${esc([horaTxt(x.o.hora_llegada, x.o.hora_fin), x.o.ciudad, x.o.banda].filter(Boolean).join(' · '))}</div><div style="margin-top:6px">${estTxt(x.o.estado)}${x.o.precio != null ? ` <span class="mono peq">${esc(dinero(x.o.precio, x.o.moneda))}</span>` : ''}</div></a>`
           : `<a class="card" style="padding:12px 14px;text-decoration:none;color:inherit" href="#/ensayos/${x.o.id}"><b>Ensayo · ${esc(x.o.titulo)}</b><div class="mut peq">${esc([horaTxt(x.o.hora_inicio, x.o.hora_fin), x.o.lugar, x.o.banda].filter(Boolean).join(' · '))}</div><div style="margin-top:6px"><span class="est mor">${x.o.van}/${x.o.citados} confirmados</span></div></a>`).join('') || (bl.length ? '' : '<p class="mut" style="margin:0">Libre.</p>')}
         <div style="display:flex;gap:8px;flex-wrap:wrap">${puede('eventos.crear') ? `<a class="btn prim chico" href="#/eventos/nuevo/${f}">+ Evento</a>` : ''}${puede('ensayos.editar') ? `<a class="btn chico" href="#/ensayos/nuevo/${f}">+ Ensayo</a>` : ''}${puede('bloqueos.editar') ? `<button class="btn chico" id="blq">Bloquear</button>` : ''}</div>`;
       $$('[data-qb]').forEach((b) => (b.onclick = () => trabajando(b, async () => { await api('bloqueos/' + b.dataset.qb, { method: 'DELETE' }); toast('Fechas habilitadas'); pintarCal(); })));
@@ -86,7 +88,7 @@ async function vCalendario(c, mes) {
       ${puede('bloqueos.editar') ? '<button class="btn" id="bq">Bloquear fechas</button>' : ''}${puede('ensayos.editar') ? '<a class="btn" href="#/ensayos/nuevo">+ Ensayo</a>' : ''}${puede('eventos.crear') ? '<a class="btn prim" href="#/eventos/nuevo">+ Evento</a>' : ''}</div></div>
     <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><div class="card sin" style="flex:999 1 640px;min-width:0"><div class="cal" id="calg"></div></div>
       <aside class="card" id="detdia" style="flex:1 1 280px;display:flex;flex-direction:column;gap:10px"></aside></div>
-    <div style="display:flex;flex-wrap:wrap;gap:14px" class="peq">${['confirmado', 'negociacion', 'pendiente', 'cotizacion', 'cancelado'].map((k) => `<span class="chip c-${COLOR_EST[k]}" style="display:inline-block">${ESTADOS[k]}</span>`).join('')}<span class="chip c-mor" style="display:inline-block">Ensayo</span><span class="mut">Rayado = fechas bloqueadas</span></div>`;
+    <div style="display:flex;flex-wrap:wrap;gap:14px" class="peq">${['confirmado', 'negociacion', 'pendiente', 'cotizacion', 'cancelado'].map((k) => `<span class="chip c-${COLOR_EST[k]}" style="display:inline-block">${ESTADOS[k]}</span>`).join('')}<span class="chip c-mor" style="display:inline-block">Ensayo</span><span class="chip c-via" style="display:inline-block">✈ Viaje</span><span class="mut">Rayado = fechas bloqueadas</span></div>`;
   $('#fb').onchange = (e) => { banda = e.target.value; sessionStorage.setItem('bg_cal_banda', banda); pintarCal(); };
   if ($('#bq')) $('#bq').onclick = () => bloquear(hoy, pintarCal);
   await pintarCal();
@@ -154,7 +156,7 @@ async function formEvento(c, e, fechaIni) {
 async function fichaEvento(c, id, pest) {
   const e = await api('eventos/' + id);
   const finVer = puede('finanzas.ver') || (e.booking_id === ME.usuario.id);
-  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ...(finVer ? [['finanzas', 'Finanzas']] : []), ...(puede('nomina.ver') || finVer ? [['nomina', 'Nómina']] : []), ...(finVer ? [['cuadre', 'Cuadre']] : []), ['historial', 'Historial']];
+  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ...(finVer ? [['finanzas', 'Finanzas']] : []), ...(puede('nomina.ver') || finVer ? [['nomina', 'Nómina']] : []), ...(finVer ? [['cuadre', 'Cuadre']] : []), ...(puede('viajes.ver') ? [['logistica', 'Logística']] : []), ['historial', 'Historial']];
   const act = tabs.some((t) => t[0] === pest) ? pest : 'resumen';
   const ag = e.agenda, problemas = ag.bloqueos.length + ag.choques.length + ag.traslados.length;
   c.innerHTML = `<div class="mut peq"><a href="#/eventos">Eventos</a> / ${esc(e.codigo)}</div>
@@ -206,6 +208,7 @@ async function fichaEvento(c, id, pest) {
   if (act === 'finanzas') return tabFinanzas(pc, e);
   if (act === 'nomina') return tabNomina(pc, e);
   if (act === 'cuadre') return tabCuadre(pc, e);
+  if (act === 'logistica') return tabLogistica(pc, e);
   if (act === 'historial') pc.innerHTML = `<div class="card sin"><div class="desliza"><table class="tabla"><tbody>${e.historial.map((h) => `<tr><td class="mono peq" style="white-space:nowrap">${esc(new Date(h.creado.replace(' ', 'T') + 'Z').toLocaleString('es-DO'))}</td><td>${esc(h.por || '')}</td><td>${esc(h.cambio)}</td></tr>`).join('') || '<tr><td class="vacio">Sin cambios.</td></tr>'}</tbody></table></div></div>`;
 }
 // hoja del contrato para imprimir o guardar como PDF

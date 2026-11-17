@@ -233,6 +233,46 @@ async function main() {
   r = await A('finanzas/resumen'); t(r.j.por_moneda.USD && r.j.por_moneda.DOP && r.j.por_moneda.DOP.ingreso === 60150, 'el resumen separa cada moneda (no las suma)', r.j.por_moneda);
   t((await Bc('eventos/' + ev1 + '/finanzas')).s === 404 && (await Bc('/api/recibo/' + pago1)).s === 404 && (await Bc('finanzas/resumen')).j.por_entregar.length === 0, 'la empresa B no ve las finanzas de A');
 
+  titulo('Giras y viajes: tramos, hoteles, itinerario y portal (Fase 4)');
+  t((await K('viajes', { method: 'POST', body: { nombre: 'No debe' } })).s === 403 && (await K('viajes')).s === 200, 'el booking ve las giras pero no las crea');
+  r = await A('viajes', { method: 'POST', body: { nombre: 'Gira Florida', desde: dia(19), hasta: dia(21), banda_id: bandaId, eventos: [ev1] } }); const gir = r.j.id;
+  t(r.s === 201 && r.j.codigo === 'GIR-00001', 'crea la gira con código correlativo', r.j);
+  r = await A('viajes/' + gir); t(r.j.eventos.length === 1 && r.j.personas.length === 1 && r.j.personas[0].musico_id === musId, 'la delegación sale del equipo de los eventos', r.j);
+  t((await A('tramos', { method: 'POST', body: { viaje_id: gir, tipo: 'vuelo', sale_fecha: dia(19), sale_hora: '10:00', llega_fecha: dia(18) } })).s === 400, 'no deja una llegada antes de la salida');
+  r = await A('archivos', { method: 'POST', body: { tipo: 'documento', datos: PNG } }); const boleto = r.j.clave;
+  r = await A('tramos', { method: 'POST', body: { viaje_id: gir, evento_id: ev1, tipo: 'vuelo', sale_fecha: dia(19), sale_hora: '10:00', sale_tz: 'America/Santo_Domingo', llega_hora: '12:00', llega_tz: 'America/Panama',
+    origen: 'SDQ', origen_ciudad: 'Santo Domingo', origen_pais: 'República Dominicana', destino: 'MIA', destino_ciudad: 'Miami', destino_pais: 'Estados Unidos', compania: 'JetBlue', numero: 'B6 1234', reserva: 'XK9P2L',
+    contacto_privado: 'Agente: Laura 809-555-0100', costo: '450', moneda: 'USD', cubierto_por: 'empresa', pasajeros: [{ musico_id: musId, asiento: '14C', archivo: boleto }] } }); const vue = r.j.id;
+  t(r.s === 201, 'registra el vuelo con su pasajero, asiento y boleto');
+  r = await A('hoteles', { method: 'POST', body: { viaje_id: gir, nombre: 'Hotel Riviera', ciudad: 'Miami', pais: 'Estados Unidos', entrada: dia(19), entrada_hora: '15:00', salida: dia(21), salida_hora: '11:00', reserva: 'H-7781', huespedes: [{ musico_id: musId, habitacion: '1204' }] } });
+  t(r.s === 201, 'registra el hotel con el huésped y su habitación');
+  await A('actividades', { method: 'POST', body: { viaje_id: gir, fecha: dia(20), hora: '13:00', titulo: 'Entrevista en radio', lugar: 'Mega 106.9' } });
+  r = await A('actividades', { method: 'POST', body: { viaje_id: gir, fecha: dia(20), hora: '09:00', titulo: 'Pagar al promotor', para: 'oficina' } }); const actOf = r.j.id;
+  r = await A('viajes/' + gir); const tv = r.j.itinerario.flatMap((x) => x.items).find((i) => i.tipo === 'tramo');
+  t(tv && tv.duracion === 180 && tv.costo === 450 && tv.contacto_privado, 'el itinerario de la oficina calcula la duración con zonas horarias y muestra costo y contacto privado', tv);
+  t(r.j.itinerario.length >= 3 && r.j.itinerario[0].items[0].tipo === 'tramo', 'el itinerario se ordena por día y hora');
+  t(r.j.alertas.some((a) => a.tipo === 'pasaporte_6m' && a.musico_id === musId), 'avisa que el pasaporte vence a menos de 6 meses del viaje', r.j.alertas);
+  t(!r.j.alertas.some((a) => a.tipo === 'sin_visa'), 'no pide visa si el músico ya la tiene para ese país');
+  r = await P('portal/itinerario'); t(r.s === 200 && !r.j.dias.flatMap((x) => x.items).some((i) => i.tipo === 'tramo'), 'el músico no ve la gira antes de publicarla');
+  t((await K('viajes/' + gir + '/publicar', { method: 'POST' })).s === 403, 'el booking no publica giras');
+  r = await A('viajes/' + gir + '/publicar', { method: 'POST' }); t(r.s === 200 && r.j.delegacion === 1 && r.j.whatsapp.length === 1, 'publica la gira y prepara el WhatsApp para la delegación', r.j);
+  r = await P('portal/itinerario'); const its = r.j.dias.flatMap((x) => x.items), mt = its.find((i) => i.tipo === 'tramo'), mh = its.find((i) => i.tipo === 'hotel_entrada');
+  t(mt && mt.asiento === '14C' && mt.reserva === 'XK9P2L' && mh && mh.habitacion === '1204', 'el músico ve su vuelo, asiento, reserva y habitación', its);
+  t(mt && mt.costo === undefined && mt.contacto_privado === undefined && typeof mt.personas === 'number', 'el músico no ve costos, contactos privados ni la lista de pasajeros');
+  t(its.some((i) => i.titulo === 'Entrevista en radio') && !its.some((i) => i.titulo === 'Pagar al promotor'), 'lo marcado «solo oficina» no le llega al músico');
+  t((await P(mt.archivo_url)).s === 200 && (await Bc(mt.archivo_url)).s === 404, 'el pasajero abre su boleto; otra empresa no');
+  t((await A('tramos/' + vue, { method: 'PUT', body: { sale_hora: '11:30', llega_hora: '13:30' } })).s === 200, 'cambia la hora del vuelo');
+  r = await A('viajes/' + gir); t(r.j.cambios_sin_avisar === 1 && r.j.cambios[0].detalle.includes('11:30') && r.j.personas.length === 1, 'después de publicar, el cambio queda anotado para avisar', r.j.cambios);
+  r = await A('viajes/' + gir); t(r.j.itinerario.flatMap((x) => x.items).find((i) => i.tipo === 'tramo').pasajeros === undefined && r.j.itinerario.flatMap((x) => x.items).find((i) => i.tipo === 'tramo').personas.length === 1, 'editar solo la hora conserva los pasajeros');
+  r = await A('viajes/' + gir + '/publicar', { method: 'POST' }); t(r.j.cambios === 1 && (await A('viajes/' + gir)).j.cambios_sin_avisar === 0, 'avisa los cambios a la delegación');
+  r = await A('eventos/' + ev1 + '/movimientos', { method: 'POST', body: { tipo: 'gasto', categoria: 'Vuelos y equipaje', monto: '450', moneda: 'USD', cubierto_por: 'empresa' } });
+  t((await A('tramos/' + vue, { method: 'PUT', body: { movimiento_id: r.j.id } })).s === 200 && (await A('tramos/' + vue, { method: 'PUT', body: { movimiento_id: 999999 } })).s === 400, 'enlaza el vuelo con su gasto del evento (y rechaza uno ajeno)');
+  r = await A('eventos/' + ev1 + '/logistica'); t(r.s === 200 && r.j.viaje_id === gir && r.j.dias.flatMap((x) => x.items).some((i) => i.tipo === 'tramo'), 'el expediente del evento muestra su logística');
+  r = await A(`calendario?desde=${dia(18)}&hasta=${dia(22)}`); t(r.j.viajes.length === 1 && r.j.viajes[0].numero === 'B6 1234', 'el calendario muestra los vuelos');
+  t((await A('itinerario?desde=' + dia(18) + '&hasta=' + dia(22))).j.dias.length >= 3, 'el itinerario consolidado junta todas las giras');
+  t((await A('actividades/' + actOf, { method: 'DELETE' })).s === 200, 'quita una actividad');
+  t((await Bc('viajes/' + gir)).s === 404 && (await Bc('tramos', { method: 'POST', body: { viaje_id: gir, sale_fecha: dia(19) } })).s === 400 && (await Bc('viajes')).j.length === 0, 'la empresa B no ve ni toca las giras de A');
+
   titulo('Plataforma, suspensión y prueba vencida');
   t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
   r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j);
