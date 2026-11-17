@@ -8,6 +8,7 @@ import { rutasPlataforma } from './plataforma.js';
 import { rutasAgenda } from './agenda.js';
 import { rutasFinanzas } from './finanzas.js';
 import { rutasViajes } from './viajes.js';
+import { rutasRider } from './rider.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
@@ -202,6 +203,8 @@ async function api(req, env, url, ectx) {
     return json((await db.prepare('SELECT a.accion, a.recurso, a.recurso_id, a.detalle, a.creado, u.nombre AS usuario FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = ? ORDER BY a.id DESC LIMIT 200').bind(empresa.id).all()).results);
   }
 
+  const rr = await rutasRider(L);
+  if (rr) return rr;
   const rv = await rutasViajes(L);
   if (rv) return rv;
   const ra = await rutasAgenda(L);

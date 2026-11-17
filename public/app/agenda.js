@@ -156,7 +156,7 @@ async function formEvento(c, e, fechaIni) {
 async function fichaEvento(c, id, pest) {
   const e = await api('eventos/' + id);
   const finVer = puede('finanzas.ver') || (e.booking_id === ME.usuario.id);
-  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ...(finVer ? [['finanzas', 'Finanzas']] : []), ...(puede('nomina.ver') || finVer ? [['nomina', 'Nómina']] : []), ...(finVer ? [['cuadre', 'Cuadre']] : []), ...(puede('viajes.ver') ? [['logistica', 'Logística']] : []), ['historial', 'Historial']];
+  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ...(finVer ? [['finanzas', 'Finanzas']] : []), ...(puede('nomina.ver') || finVer ? [['nomina', 'Nómina']] : []), ...(finVer ? [['cuadre', 'Cuadre']] : []), ...(puede('viajes.ver') ? [['logistica', 'Logística']] : []), ...(puede('rider.ver') || e.puede_editar ? [['tecnico', 'Técnico']] : []), ['historial', 'Historial']];
   const act = tabs.some((t) => t[0] === pest) ? pest : 'resumen';
   const ag = e.agenda, problemas = ag.bloqueos.length + ag.choques.length + ag.traslados.length;
   c.innerHTML = `<div class="mut peq"><a href="#/eventos">Eventos</a> / ${esc(e.codigo)}</div>
@@ -209,6 +209,7 @@ async function fichaEvento(c, id, pest) {
   if (act === 'nomina') return tabNomina(pc, e);
   if (act === 'cuadre') return tabCuadre(pc, e);
   if (act === 'logistica') return tabLogistica(pc, e);
+  if (act === 'tecnico') return tabTecnico(pc, e);
   if (act === 'historial') pc.innerHTML = `<div class="card sin"><div class="desliza"><table class="tabla"><tbody>${e.historial.map((h) => `<tr><td class="mono peq" style="white-space:nowrap">${esc(new Date(h.creado.replace(' ', 'T') + 'Z').toLocaleString('es-DO'))}</td><td>${esc(h.por || '')}</td><td>${esc(h.cambio)}</td></tr>`).join('') || '<tr><td class="vacio">Sin cambios.</td></tr>'}</tbody></table></div></div>`;
 }
 // hoja del contrato para imprimir o guardar como PDF

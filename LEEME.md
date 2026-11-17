@@ -8,7 +8,7 @@ Doble clic en **`tools/Publicar BandGo.bat`**. Hace todo: baja de GitHub, instal
 crea la base `bandgo-db` y el bucket `bandgo-archivos` la primera vez, respalda, migra, publica y crea la llave de cifrado.
 Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
-## Qué hay (v0.4 · Fases 0 a 4)
+## Qué hay (v0.5 · Fases 0 a 5)
 - **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (obligatorio para la plataforma),
   frenos por conexión, Turnstile, avisos de seguridad, cifrado AES-GCM, bitácora, errores, Plataforma (empresas, planes, ajustes, errores),
   varias empresas por usuario, roles (dueño, admin, manager, booking, músico, sonidista, promotor) y permisos por acción que el dueño puede cambiar.
@@ -37,8 +37,17 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
   los costos pasan a los gastos del evento con un botón; los vuelos salen en el calendario; pestaña «Logística» en cada
   evento; y «Mi itinerario» en el portal del músico (no ve costos ni contactos privados).
 
+- **Fase 5 · rider técnico:** riders por país (RD, EE. UU., Europa), generales y personalizados por evento (RID-00001);
+  editor del plano del escenario en SVG (arrastrar con el dedo o el ratón, girar, duplicar, deshacer, medidas del escenario,
+  batería, congas, timbales, teclado, amplificadores, micrófonos, DI, monitores, side fills, in-ear, tarimas, tomas, músicos);
+  lista de canales (con «batería completa» y «crear canales desde el plano»), mezclas de monitor, requerimientos (consola,
+  monitores, microfonía, DI y backline, energía, escenario, instrucciones) y contactos técnicos; se guarda solo mientras edita;
+  versiones congeladas con nota, fecha, autor y huella; hoja para imprimir / PDF (cada descarga queda en la bitácora);
+  pestaña «Técnico» en el evento (rider sugerido según el país, proveedor de sonido, técnico local, datos del escenario);
+  y el portal del sonidista con sus eventos, horarios, contactos de sonido y la última versión del rider asignado.
+
 ## Lo que sigue
 
-Fase 5 rider · Fase 6 reportes · Fase 7 comunicados y chat. La red interna con fotos (muro) queda en pausa hasta nuevo aviso.
+Fase 6 reportes · Fase 7 comunicados y chat. La red interna con fotos (muro) queda en pausa hasta nuevo aviso.
 
 Detalles técnicos: `docs/TECNICO.md`.
