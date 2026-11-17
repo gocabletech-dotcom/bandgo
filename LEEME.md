@@ -15,8 +15,14 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 - **Fase 1 · personal:** bandas con logo, integrantes con foto, pasaportes y visas cifrados con alertas (180/90/60/30 días),
   datos de pago cifrados y enmascarados, invitaciones y portal del músico (inicio, documentos, pagos, perfil).
 
+- **Fase 2 · agenda:** calendario mensual con filtros, eventos con expediente (código EVT-00001, estados, horarios, quién cubre cada cosa,
+  equipo asignado, historial), motor de disponibilidad (bloqueos por empresa/país/banda/integrante, choques de horario, traslados entre países,
+  excepción autorizada por el manager), clientes con historial, contratos con versiones y hoja para imprimir/PDF, ensayos (crear, repetir cada
+  semana, repertorio, publicar y avisar por correo/WhatsApp, asistencia) y la agenda del músico con «Voy / Tal vez / No voy».
+  El booking solo ve los montos de sus propios eventos.
+
 ## Lo que sigue
-Fase 2 calendario, ensayos (crear y publicar), eventos y contratos · Fase 3 finanzas, nómina y cuadres · Fase 4 giras y viajes ·
+Fase 3 finanzas, nómina y cuadres · Fase 4 giras y viajes ·
 Fase 5 rider · Fase 6 reportes · Fase 7 comunicados y chat. La red interna con fotos (muro) queda en pausa hasta nuevo aviso.
 
 Detalles técnicos: `docs/TECNICO.md`.

@@ -127,6 +127,61 @@ async function main() {
   t((await P('portal/perfil', { method: 'PUT', body: { telefono: '8095551111', emergencia_nombre: 'María' } })).s === 200, 'actualiza su perfil');
   t((await P('portal/documentos', { method: 'POST', body: { tipo: 'visa', pais: 'Estados Unidos', clase: 'B1/B2', numero: 'V998877', vence: '2029-05-01' } })).s === 200, 'agrega su visa');
 
+  titulo('Agenda: eventos, bloqueos, choques, contratos y ensayos (Fase 2)');
+  const dia = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  r = await A('clientes', { method: 'POST', body: { nombre: 'Hotel Jaragua', telefono: '8095550142', email: 'eventos@jaragua.local', fiscal: '101-00000-1' } }); const cliId = r.j.id;
+  t(r.s === 201, 'crea el cliente');
+  r = await A('eventos', { method: 'POST', body: { nombre: 'Festival Latino Miami', fecha: dia(20), pais: 'Estados Unidos', ciudad: 'Miami', hora_llegada: '15:00', hora_show: '21:30', hora_fin: '23:00', banda_id: bandaId, cliente_id: cliId, precio: '6000', moneda: 'USD', tipo: 'publico', cubre: { vuelo: { quien: 'cliente' } } } });
+  const ev1 = r.j.id; t(r.s === 201 && r.j.codigo === 'EVT-00001', 'crea el evento con código correlativo', r.j);
+  r = await A('eventos/' + ev1); t(r.j.equipo.length === 1 && r.j.equipo[0].id === musId && r.j.precio === 6000, 'asigna solo a los integrantes de la banda y guarda el precio', r.j);
+  r = await A('eventos', { method: 'POST', body: { nombre: 'Choque', fecha: dia(20), hora_show: '22:00', banda_id: bandaId } });
+  t(r.s === 409 && r.j.agenda.choques.length === 1, 'detecta que el músico ya tiene otra actividad a esa hora', r.j);
+  t((await A('eventos', { method: 'POST', body: { nombre: 'Otra banda mismo día', fecha: dia(20), hora_show: '22:00', musicos: [] } })).s === 201, 'otra banda sin esos músicos sí puede tocar el mismo día');
+  t((await A('bloqueos', { method: 'POST', body: { desde: dia(25), hasta: dia(27), alcance: 'pais', pais: 'España', motivo: 'Exclusividad con promotor' } })).s === 201, 'bloquea fechas para un país');
+  r = await A('eventos', { method: 'POST', body: { nombre: 'Madrid', fecha: dia(26), pais: 'españa', banda_id: bandaId } });
+  t(r.s === 409 && r.j.agenda.bloqueos.length === 1, 'el bloqueo por país frena el evento (sin importar acentos)', r.j);
+  t((await A('eventos', { method: 'POST', body: { nombre: 'Santo Domingo', fecha: dia(26), pais: 'República Dominicana', musicos: [] } })).s === 201, 'el bloqueo de España no bloquea otros países');
+  r = await A('eventos', { method: 'POST', body: { nombre: 'Madrid', fecha: dia(26), pais: 'España', banda_id: bandaId, excepcion: true } });
+  t(r.s === 201, 'el dueño autoriza la excepción');
+  r = await A('disponibilidad', { method: 'POST', body: { fecha: dia(21), pais: 'República Dominicana', musicos: [musId] } });
+  t(r.j.traslados.length === 1, 'avisa del traslado entre países en días seguidos', r.j);
+
+  r = await K('eventos', { method: 'POST', body: { nombre: 'Boda Céspedes', fecha: dia(40), precio: '5000', moneda: 'USD', musicos: [] } }); const evK = r.j.id;
+  t(r.s === 201, 'el booking crea su evento');
+  t((await K('eventos/' + evK)).j.precio === 5000, 'el booking ve el monto de su evento');
+  t((await K('eventos/' + ev1)).j.precio === null, 'el booking NO ve el monto de eventos ajenos');
+  t((await K('eventos/' + ev1, { method: 'PUT', body: { nombre: 'Cambiado' } })).s === 403, 'el booking no edita eventos ajenos');
+  t((await K('calendario?desde=' + dia(0) + '&hasta=' + dia(60))).j.eventos.find((e) => e.id === ev1).precio === null, 'en el calendario tampoco ve montos ajenos');
+
+  r = await A('eventos/' + ev1 + '/contratos', { method: 'POST', body: { precio: '10000', moneda: 'USD', anticipo: '5000', condiciones: 'Dos tandas de 60 minutos.' } });
+  t(r.s === 201 && r.j.version === 1, 'crea la versión 1 del contrato');
+  r = await A('eventos/' + ev1 + '/contratos', { method: 'POST', body: { precio: '10500', moneda: 'USD', anticipo: '5000' } });
+  t(r.j.version === 2, 'crea la versión 2 (la 1 queda anulada, no se borra)');
+  r = await A('eventos/' + ev1); const v2 = r.j.contratos[0].id;
+  t(r.j.contratos.length === 2 && r.j.contratos[1].estado === 'anulado' && r.j.precio === 10500, 'conserva el historial de versiones', r.j.contratos);
+  t((await A('contratos/' + v2 + '/estado', { method: 'PUT', body: { estado: 'firmado' } })).s === 200 && (await A('eventos/' + ev1)).j.estado === 'confirmado', 'firmar el contrato confirma el evento');
+  t((await A('contratos/' + v2 + '/estado', { method: 'PUT', body: { estado: 'enviado' } })).s === 409, 'un contrato firmado no se modifica');
+  t((await K('contratos/' + v2)).s === 403, 'el booking no ve contratos ajenos');
+  t((await A('contratos/' + v2)).j.datos.cliente.nombre === 'Hotel Jaragua', 'el contrato guarda la foto de los datos del cliente');
+
+  r = await A('ensayos', { method: 'POST', body: { titulo: 'Ensayo general', fecha: dia(20), hora_inicio: '20:00', hora_fin: '22:00', banda_id: bandaId, lugar: 'Estudio', repertorio: [{ titulo: 'Medley', enlace: 'https://youtube.com/x' }], repetir_semanas: 3 } });
+  const ens1 = r.j.ids[0]; t(r.s === 201 && r.j.ids.length === 3, 'crea 3 ensayos semanales en borrador');
+  t(r.j.advertencias.length === 1 && r.j.advertencias[0].choques.length === 1, 'avisa que el primer ensayo choca con el festival', r.j.advertencias);
+  t((await P('portal/agenda')).j.ensayos.length === 0, 'el músico no ve ensayos en borrador');
+  r = await A('ensayos/' + ens1 + '/publicar', { method: 'POST', body: { serie: true } });
+  t(r.s === 200 && r.j.publicados === 3 && r.j.aviso.whatsapp.length === 1, 'publica la serie y prepara el aviso por WhatsApp', r.j);
+  r = await P('portal/agenda'); t(r.j.ensayos.length === 3 && r.j.ensayos[0].repertorio.length === 1 && r.j.eventos.some((e) => e.id === ev1), 'el músico ve sus ensayos con repertorio y su evento confirmado', r.j);
+  t(r.j.eventos.every((e) => e.precio === undefined && e.precio_c === undefined), 'el músico no ve el precio del evento');
+  t((await P(`portal/ensayos/${ens1}/responder`, { method: 'POST', body: { respuesta: 'no' } })).s === 400, 'para decir «No voy» pide el motivo');
+  t((await P(`portal/ensayos/${ens1}/responder`, { method: 'POST', body: { respuesta: 'no', motivo: 'Estoy en Miami' } })).s === 200, 'el músico responde');
+  r = await A('ensayos/' + ens1); t(r.j.citados[0].respuesta === 'no' && r.j.citados[0].motivo === 'Estoy en Miami', 'la oficina ve la respuesta y el motivo');
+  t((await K('ensayos', { method: 'POST', body: { titulo: 'x', fecha: dia(3) } })).s === 403, 'el booking no crea ensayos');
+  t((await A('ensayos/' + ens1 + '/cancelar', { method: 'POST' })).s === 200 && (await P('portal/agenda')).j.ensayos.find((e) => e.id === ens1).estado === 'cancelado', 'cancelar el ensayo se ve en el portal');
+
+  t((await Bc('eventos/' + ev1)).s === 404 && (await Bc('contratos/' + v2)).s === 404 && (await Bc('ensayos/' + ens1)).s === 404, 'la empresa B no ve eventos, contratos ni ensayos de A');
+  t((await Bc('calendario?desde=' + dia(0) + '&hasta=' + dia(60))).j.eventos.length === 0, 'el calendario de B está vacío');
+  t((await Bc('eventos', { method: 'POST', body: { nombre: 'x', fecha: dia(5), cliente_id: cliId } })).s === 400, 'B no puede usar un cliente de A');
+
   titulo('Plataforma, suspensión y prueba vencida');
   t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
   r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j);

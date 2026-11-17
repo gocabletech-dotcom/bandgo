@@ -8,9 +8,10 @@
 | `src/auth.js` | Setup, registro (código por correo si está activo), login + dos pasos, recuperar contraseña, invitaciones, cambio de clave, sesiones. |
 | `src/permisos.js` | Roles, catálogo de permisos `recurso.acción` y los de fábrica. La empresa los cambia en `rol_permisos`. |
 | `src/personal.js` | Fase 1: bandas, integrantes, documentos de viaje, datos de pago, invitaciones al portal y el portal del músico. |
+| `src/agenda.js` | Fase 2: calendario, disponibilidad (`revisarAgenda`), bloqueos, clientes, eventos, contratos con versiones, ensayos y la agenda del portal. |
 | `src/plataforma.js` | Superadministrador: empresas, planes, ajustes, errores. |
-| `migrations/` | `0001_nucleo.sql`, `0002_personal.sql`. Nunca se edita una migración publicada: se agrega otra. |
-| `public/app/` | La app: `app.js` (rutas `#/…`), `app.css` (colores del logo). |
+| `migrations/` | `0001_nucleo.sql`, `0002_personal.sql`, `0003_agenda.sql`. Nunca se edita una migración publicada: se agrega otra. |
+| `public/app/` | La app: `app.js` (rutas `#/…`, oficina, portal, plataforma), `agenda.js` (pantallas de la Fase 2), `app.css` (colores del logo). |
 | `tools/pruebas.mjs` | Pruebas de punta a punta con una base local temporal (aislamiento, permisos, cifrado, portal, plataforma). |
 
 ## Reglas

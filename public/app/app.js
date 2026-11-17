@@ -166,8 +166,8 @@ function vistaSetup() {
 // ---------- oficina ----------
 const puede = (p) => ME && ME.permisos && ME.permisos.includes(p);
 const MENU = [
-  { g: 'Principal', i: [['inicio', 'Resumen general', 'home'], ['calendario', 'Calendario', 'cal', 2], ['ensayos', 'Ensayos', 'music', 2]] },
-  { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 2], ['clientes', 'Clientes', 'brief', 2], ['contratos', 'Contratos', 'file', 2], ['comisiones', 'Comisiones', 'pct', 3]] },
+  { g: 'Principal', i: [['inicio', 'Resumen general', 'home'], ['calendario', 'Calendario', 'cal', 0, 'eventos.ver'], ['ensayos', 'Ensayos', 'music', 0, 'ensayos.ver']] },
+  { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 0, 'eventos.ver'], ['clientes', 'Clientes', 'brief', 0, 'clientes.ver'], ['comisiones', 'Comisiones', 'pct', 3]] },
   { g: 'Equipo', i: [['bandas', 'Bandas', 'band', 0, 'bandas.ver'], ['integrantes', 'Integrantes', 'users', 0, 'musicos.ver']] },
   { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 3], ['nominas', 'Nóminas', 'wallet', 3], ['cuadres', 'Cuadres', 'check', 3], ['gastos', 'Gastos generales', 'receipt', 3]] },
   { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 4], ['itinerarios', 'Itinerarios', 'map', 4], ['rider', 'Rider técnico', 'rider', 5]] },
@@ -175,7 +175,7 @@ const MENU = [
   { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 6], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
   const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
@@ -190,7 +190,7 @@ function marco(seccion, titulo) {
       <div class="lat-pie"><button class="btn chico" style="width:100%" id="salir">${ico('out')} Cerrar sesión</button></div></nav>
     <div class="principal"><header class="superior"><div class="ruta"><button class="btn chico menu-btn" id="abrirMenu" aria-label="Abrir menú">${ico('menu')}</button><span class="mut">${esc(E.nombre)}</span><span class="mut">/</span><b>${esc(titulo)}</b></div>
       <div class="usr"><span class="av" style="background:var(--tinta);color:#fff">${esc(iniciales(ME.usuario.nombre))}</span><span class="n"><b>${esc(ME.usuario.nombre)}</b><span>${esc(ME.rol_nombre)}</span></span></div></header>
-      ${E.limitado ? '<div class="aviso av" style="margin:16px 32px 0">Su prueba gratis terminó. Puede ver todo, pero para hacer cambios hay que activar un plan. Escríbanos a ' + esc(PUB.soporte || '') + '.</div>' : ''}
+      ${E.limitado ? '<div class="aviso adv" style="margin:16px 32px 0">Su prueba gratis terminó. Puede ver todo, pero para hacer cambios hay que activar un plan. Escríbanos a ' + esc(PUB.soporte || '') + '.</div>' : ''}
       <main class="contenido" id="c"></main></div></div>`;
   $('#salir').onclick = salir;
   $('#abrirMenu').onclick = () => $('#lat').classList.toggle('abierto');
@@ -198,7 +198,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b) {
-  const V = { inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
@@ -218,11 +218,10 @@ async function vInicio(c) {
     </section>
     <div class="grid2">
       <div class="card sin"><div class="card-h"><h2>Alertas de documentos</h2><span class="tag">180 · 90 · 60 · 30 días</span></div>
-        ${al.length ? `<div class="desliza"><table class="tabla"><tbody>${al.map((x) => `<tr><td><a href="#/integrantes/${x.musico_id}" style="color:var(--tinta);font-weight:600;text-decoration:none">${esc(x.titulo)}</a></td><td class="mono peq">${esc(fechaTxt(x.vence))}</td><td><span class="est ${x.nivel === 'vencido' ? 'mal' : x.nivel === 'urgente' ? 'mal' : 'av'}">${x.dias < 0 ? 'Vencido' : 'En ' + x.dias + ' días'}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="vacio">Ningún documento vence en los próximos 180 días.</div>'}</div>
-      <div class="card" style="display:flex;flex-direction:column;gap:12px"><h2>Lo que viene en BandGo</h2>
-        <p class="mut" style="margin:0;line-height:1.6">Ya puede registrar sus <b>bandas con logo</b>, sus <b>integrantes con foto</b>, sus pasaportes y visas (con alertas) y darles acceso a su <b>portal</b>.</p>
-        <div style="display:flex;flex-wrap:wrap;gap:8px"><span class="tag gris">Fase 2 · Calendario, ensayos, eventos y contratos</span><span class="tag gris">Fase 3 · Finanzas, nómina y cuadres</span><span class="tag gris">Fase 4 · Giras y viajes</span><span class="tag gris">Fase 5 · Rider técnico</span></div></div>
+        ${al.length ? `<div class="desliza"><table class="tabla"><tbody>${al.map((x) => `<tr><td><a href="#/integrantes/${x.musico_id}" style="color:var(--tinta);font-weight:600;text-decoration:none">${esc(x.titulo)}</a></td><td class="mono peq">${esc(fechaTxt(x.vence))}</td><td><span class="est ${x.nivel === 'vencido' ? 'mal' : x.nivel === 'urgente' ? 'mal' : 'adv'}">${x.dias < 0 ? 'Vencido' : 'En ' + x.dias + ' días'}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="vacio">Ningún documento vence en los próximos 180 días.</div>'}</div>
+      <div class="card sin" id="prox"><div class="card-h"><h2>Próximas actividades</h2><a href="#/calendario" class="peq">Ver calendario</a></div><div class="vacio">Cargando…</div></div>
     </div>`;
+  if (puede('eventos.ver') || puede('ensayos.ver')) proximas($('#prox')); else $('#prox').remove();
 }
 
 // ---------- bandas ----------
@@ -296,7 +295,7 @@ async function vIntegrantes(c, a, b) {
     $('#lista').innerHTML = V.length ? V.map((m) => `<a class="card" href="#/integrantes/${m.id}" style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;text-decoration:none;color:inherit">${fotoAv(m.foto_url, m.nombre, 'g')}
       <div><div style="font-weight:700;font-size:15px">${esc(m.nombre)}</div><div class="mut peq">${esc(m.instrumento || (m.tipo === 'sonidista' ? 'Sonidista' : ''))}</div></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${m.bandas.map((x) => `<span class="tag">${esc(x.nombre)}</span>`).join('')}</div>
-      ${m.alerta_doc ? `<span class="est ${m.alerta_doc.nivel === 'aviso' ? 'av' : 'mal'}">${m.alerta_doc.dias < 0 ? 'Documento vencido' : 'Documento vence en ' + m.alerta_doc.dias + ' días'}</span>` : m.sin_pasaporte ? '<span class="est gr">Falta el pasaporte</span>' : m.sin_pasaporte === false ? '<span class="est ok">Documentos al día</span>' : ''}
+      ${m.alerta_doc ? `<span class="est ${m.alerta_doc.nivel === 'aviso' ? 'adv' : 'mal'}">${m.alerta_doc.dias < 0 ? 'Documento vencido' : 'Documento vence en ' + m.alerta_doc.dias + ' días'}</span>` : m.sin_pasaporte ? '<span class="est gr">Falta el pasaporte</span>' : m.sin_pasaporte === false ? '<span class="est ok">Documentos al día</span>' : ''}
       <span class="peq ${m.portal ? '' : 'mut'}">${m.portal ? 'Con acceso al portal' : 'Sin acceso al portal'}</span></a>`).join('') : '<div class="card vacio" style="grid-column:1/-1">No hay integrantes aquí.</div>';
   };
   $('#fil').onclick = (e) => { const bt = e.target.closest('button'); if (!bt) return; filtro = bt.dataset.f; $$('#fil button').forEach((x) => x.classList.toggle('prim', x === bt)); dibujar(); };
@@ -346,7 +345,7 @@ async function fichaMusico(c, id, pest) {
   $$('.pestanas button').forEach((bt) => (bt.onclick = () => { location.hash = `#/integrantes/${id}/${bt.dataset.t}`; }));
   if ($('#inv')) $('#inv').onclick = (ev) => trabajando(ev.target, async () => {
     const r = await api(`musicos/${id}/invitar`, { method: 'POST' });
-    modal('Acceso al portal', `${r.enviado ? `<div class="aviso ok">Le mandamos la invitación a ${esc(m.email)}.</div>` : '<div class="aviso av">Los correos no están activados en la plataforma. Mándele este enlace por WhatsApp:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: `${m.whatsapp ? `<a class="btn" target="_blank" rel="noopener" href="https://wa.me/${esc(m.whatsapp)}?text=${encodeURIComponent('Hola ' + m.nombre.split(' ')[0] + ', este es tu acceso a BandGo: ' + r.enlace)}">Enviar por WhatsApp</a>` : ''}<button class="btn prim" data-cerrar>Listo</button>` });
+    modal('Acceso al portal', `${r.enviado ? `<div class="aviso ok">Le mandamos la invitación a ${esc(m.email)}.</div>` : '<div class="aviso adv">Los correos no están activados en la plataforma. Mándele este enlace por WhatsApp:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: `${m.whatsapp ? `<a class="btn" target="_blank" rel="noopener" href="https://wa.me/${esc(m.whatsapp)}?text=${encodeURIComponent('Hola ' + m.nombre.split(' ')[0] + ', este es tu acceso a BandGo: ' + r.enlace)}">Enviar por WhatsApp</a>` : ''}<button class="btn prim" data-cerrar>Listo</button>` });
   });
   const pc = $('#pc');
   if (act === 'datos') {
@@ -359,7 +358,7 @@ async function fichaMusico(c, id, pest) {
 }
 // pasaportes y visas (oficina y portal)
 function pintarDocs(pc, docs, editar, guardar, borrar, recargar) {
-  const nivel = (a) => (!a ? '<span class="est ok">Vigente</span>' : a.dias < 0 ? '<span class="est mal">Vencido</span>' : `<span class="est ${a.nivel === 'aviso' ? 'av' : 'mal'}">Vence en ${a.dias} días</span>`);
+  const nivel = (a) => (!a ? '<span class="est ok">Vigente</span>' : a.dias < 0 ? '<span class="est mal">Vencido</span>' : `<span class="est ${a.nivel === 'aviso' ? 'adv' : 'mal'}">Vence en ${a.dias} días</span>`);
   pc.innerHTML = `<div class="card sin"><div class="card-h"><div><h2>Pasaporte y visas</h2><div class="mut peq">Los números se guardan cifrados. Avisos a 180, 90, 60 y 30 días.</div></div>${editar ? '<button class="btn prim chico" id="nd">+ Documento</button>' : ''}</div>
     ${docs.length ? `<div class="desliza"><table class="tabla"><thead><tr><th>Documento</th><th>Número</th><th>Emisión</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>${docs.map((x) => `<tr><td><b>${x.tipo === 'visa' ? 'Visa' : 'Pasaporte'}</b> <span class="mut">${esc([x.clase, x.pais].filter(Boolean).join(' · '))}</span></td><td class="mono">${esc(x.numero || '—')}</td><td class="mono peq">${esc(fechaTxt(x.emision))}</td><td class="mono peq">${esc(fechaTxt(x.vence))}</td><td>${nivel(x.alerta)}</td>
       <td style="white-space:nowrap">${x.archivo_url ? `<a class="btn chico" href="${esc(x.archivo_url)}" target="_blank" rel="noopener">Ver archivo</a> ` : x.tiene_archivo ? '<span class="mut peq">Archivo guardado</span> ' : ''}${editar ? `<button class="btn chico" data-e="${x.id}">Editar</button>${borrar ? ` <button class="btn chico peligro" data-b="${x.id}">Quitar</button>` : ''}` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="vacio">Sin documentos registrados.</div>'}</div>`;
@@ -423,7 +422,7 @@ async function vUsuarios(c) {
     const md = modal('Invitar a la oficina', `<label class="campo">Nombre<input name="nombre"></label><label class="campo">Correo<input type="email" name="email" required></label>
       <label class="campo">Rol<select name="rol">${['admin', 'manager', 'booking'].filter((r) => r !== 'admin' || ME.rol === 'dueno').map((r) => `<option value="${r}">${esc(U.roles[r])}</option>`).join('')}</select></label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gi">Invitar</button>' });
     $('#gi', md.el).onclick = (ev) => trabajando(ev.target, async () => { const d = Object.fromEntries($$('input[name],select[name]', md.el).map((i) => [i.name, i.value])); const r = await api('usuarios', { method: 'POST', body: d }); md.cerrar();
-      modal('Invitación creada', `${r.enviado ? '<div class="aviso ok">Le mandamos la invitación por correo.</div>' : '<div class="aviso av">Los correos no están activados. Pásele este enlace:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: '<button class="btn prim" data-cerrar>Listo</button>' }); vUsuarios(c); });
+      modal('Invitación creada', `${r.enviado ? '<div class="aviso ok">Le mandamos la invitación por correo.</div>' : '<div class="aviso adv">Los correos no están activados. Pásele este enlace:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: '<button class="btn prim" data-cerrar>Listo</button>' }); vUsuarios(c); });
   };
   $$('[data-u]').forEach((b) => (b.onclick = () => { const u = U.usuarios.find((x) => x.id === Number(b.dataset.u));
     const md = modal('Acceso de ' + u.nombre, `<label class="campo">Rol<select name="rol">${Object.entries(U.roles).filter(([k]) => k !== 'dueno' && (k !== 'admin' || ME.rol === 'dueno')).map(([k, t]) => `<option value="${k}"${u.rol === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><label class="chk"><input type="checkbox" name="activo" ${u.activo ? 'checked' : ''}> Tiene acceso</label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gu">Guardar</button>' });
@@ -454,18 +453,20 @@ async function vAuditoria(c) {
 
 // ---------- portal del músico (móvil) ----------
 async function portal(sec) {
-  let P; try { P = await api('portal'); } catch (e) { $('#root').innerHTML = `<div class="portal"><div class="p-cab">${marca}</div><div class="p-cuerpo" style="margin-top:16px"><div class="aviso av">${esc(e.message)}</div><button class="btn" id="sl">Cerrar sesión</button></div></div>`; $('#sl').onclick = salir; return; }
+  let P; try { P = await api('portal'); } catch (e) { $('#root').innerHTML = `<div class="portal"><div class="p-cab">${marca}</div><div class="p-cuerpo" style="margin-top:16px"><div class="aviso adv">${esc(e.message)}</div><button class="btn" id="sl">Cerrar sesión</button></div></div>`; $('#sl').onclick = salir; return; }
   const m = P.musico;
-  const tabs = [['inicio', 'Inicio', 'home'], ['documentos', 'Documentos', 'doc'], ['pago', 'Pagos', 'wallet'], ['perfil', 'Perfil', 'users']];
+  const tabs = [['inicio', 'Inicio', 'home'], ['agenda', 'Agenda', 'cal'], ['documentos', 'Documentos', 'doc'], ['pago', 'Pagos', 'wallet'], ['perfil', 'Perfil', 'users']];
   $('#root').innerHTML = `<div class="portal"><div class="p-cab">${fotoAv(m.foto_url, m.nombre, 'm')}<div style="flex:1"><div class="peq" style="color:#CBD5E1">Hola,</div><div style="font-family:var(--f-tit);font-size:21px;font-weight:700">${esc(m.nombre)}</div></div><span class="tag" style="background:var(--morado);color:#fff">${esc(P.empresa.nombre)}</span></div>
     <div class="p-cuerpo" id="pc"></div><nav class="p-tabs" aria-label="Menú del portal">${tabs.map(([k, t, i]) => `<a href="#/${k}" class="${k === sec ? 'act' : ''}"><span class="i">${ico(i, 20)}</span>${t}</a>`).join('')}</nav></div>`;
   const pc = $('#pc');
   if (sec === 'inicio') {
     const docs = P.documentos.filter((d) => d.alerta);
     pc.innerHTML = `<div class="card" style="display:flex;flex-direction:column;gap:8px;box-shadow:0 6px 20px rgba(15,23,42,.1)"><div class="peq mut" style="font-weight:700;letter-spacing:1px">MIS BANDAS</div>${P.bandas.map((b) => `<div style="display:flex;gap:10px;align-items:center">${logoBanda(b, 'ch')}<b>${esc(b.nombre)}</b>${b.funcion ? `<span class="mut peq">· ${esc(b.funcion)}</span>` : ''}</div>`).join('') || '<span class="mut">Aún no está en una banda.</span>'}</div>
-      ${docs.length ? docs.map((d) => `<div class="aviso ${d.alerta.nivel === 'aviso' ? 'av' : 'mal'}"><b>${d.tipo === 'visa' ? 'Visa' : 'Pasaporte'} ${esc(d.pais || '')}</b>: ${d.alerta.dias < 0 ? 'vencido' : 'vence en ' + d.alerta.dias + ' días'}. <a href="#/documentos">Actualizar</a></div>`).join('') : '<div class="aviso ok">Sus documentos de viaje están al día.</div>'}
-      <div class="card"><h2>Próximamente aquí</h2><p class="mut" style="margin:8px 0 0;line-height:1.6">Su agenda de presentaciones y ensayos, el itinerario de cada viaje, sus pagos por evento y los comunicados de la oficina.</p></div>`;
+      ${docs.length ? docs.map((d) => `<div class="aviso ${d.alerta.nivel === 'aviso' ? 'adv' : 'mal'}"><b>${d.tipo === 'visa' ? 'Visa' : 'Pasaporte'} ${esc(d.pais || '')}</b>: ${d.alerta.dias < 0 ? 'vencido' : 'vence en ' + d.alerta.dias + ' días'}. <a href="#/documentos">Actualizar</a></div>`).join('') : '<div class="aviso ok">Sus documentos de viaje están al día.</div>'}
+      <div id="pa"></div>`;
+    portalProximo($('#pa'));
   }
+  if (sec === 'agenda') return portalAgenda(pc);
   if (sec === 'documentos') pintarDocs(pc, P.documentos, true, (d, id) => api('portal/documentos' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: d }), null, () => portal('documentos'));
   if (sec === 'pago') pintarPago(pc, P.cuenta_pago, true, (d) => api('portal/cuenta-pago', { method: 'PUT', body: d }), () => portal('pago'));
   if (sec === 'perfil') {
@@ -488,7 +489,7 @@ async function plataforma(sec) {
     <div class="principal"><header class="superior"><div class="ruta"><button class="btn chico menu-btn" id="abrirMenu" aria-label="Abrir menú">${ico('menu')}</button><span class="mut">Plataforma</span><span class="mut">/</span><b>${esc((items.find((x) => x[0] === sec) || items[0])[1])}</b></div><div class="usr"><span class="n"><b>${esc(ME.usuario.nombre)}</b><span>Superadministrador</span></span></div></header><main class="contenido" id="c"></main></div></div>`;
   $('#salir').onclick = salir; $('#abrirMenu').onclick = () => $('#lat').classList.toggle('abierto');
   const c = $('#c');
-  if (ME.dos_pasos_obligatorio && !ME.dos_pasos && sec !== 'cuenta') { c.innerHTML = '<div class="aviso av">Active primero la verificación en dos pasos. <a href="#/cuenta">Ir a Mi cuenta</a></div>'; return; }
+  if (ME.dos_pasos_obligatorio && !ME.dos_pasos && sec !== 'cuenta') { c.innerHTML = '<div class="aviso adv">Active primero la verificación en dos pasos. <a href="#/cuenta">Ir a Mi cuenta</a></div>'; return; }
   try {
     if (sec === 'cuenta') return vCuenta(c);
     if (sec === 'resumen') {
@@ -526,4 +527,4 @@ async function plataforma(sec) {
   } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
 }
 
-arrancar();
+window.addEventListener('DOMContentLoaded', arrancar);

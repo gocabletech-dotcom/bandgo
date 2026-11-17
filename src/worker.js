@@ -5,6 +5,7 @@ import { rutasPublicas, rutasCuenta, COOKIE, INACTIVO_MS, dosPasosObligatorio } 
 import { ROLES, ROLES_OFICINA, ROLES_PORTAL, PERMISOS_CAT, FABRICA, permisosDe } from './permisos.js';
 import { rutasPersonal, invitar } from './personal.js';
 import { rutasPlataforma } from './plataforma.js';
+import { rutasAgenda } from './agenda.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
@@ -192,6 +193,8 @@ async function api(req, env, url, ectx) {
     return json((await db.prepare('SELECT a.accion, a.recurso, a.recurso_id, a.detalle, a.creado, u.nombre AS usuario FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = ? ORDER BY a.id DESC LIMIT 200').bind(empresa.id).all()).results);
   }
 
+  const ra = await rutasAgenda(L);
+  if (ra) return ra;
   const r = await rutasPersonal(L);
   if (r) return r;
   return err('Ruta no válida', 404);

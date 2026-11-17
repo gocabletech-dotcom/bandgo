@@ -187,7 +187,7 @@ export async function rutasPersonal(L) {
       if (d.email && !emailOk(d.email)) return err('Correo no válido');
       const foto = d.foto ? await archivoValido(db, E, d.foto, 'foto_musico') : m.foto_r2;
       await db.prepare('UPDATE musicos SET telefono = ?, whatsapp = ?, direccion = ?, pais_residencia = ?, nacimiento = ?, emergencia_nombre = ?, emergencia_telefono = ?, foto_r2 = ? WHERE id = ?')
-        .bind(soloDigitos(d.telefono) || null, soloDigitos(d.whatsapp) || null, txt(d.direccion, 200), txt(d.pais_residencia, 40), fecha(d.nacimiento), txt(d.emergencia_nombre, 80), soloDigitos(d.emergencia_telefono) || null, foto, m.id).run();
+        .bind(...[['telefono', (x) => soloDigitos(x) || null], ['whatsapp', (x) => soloDigitos(x) || null], ['direccion', (x) => txt(x, 200)], ['pais_residencia', (x) => txt(x, 40)], ['nacimiento', fecha], ['emergencia_nombre', (x) => txt(x, 80)], ['emergencia_telefono', (x) => soloDigitos(x) || null]].map(([k, f]) => (d[k] !== undefined ? f(d[k]) : m[k])), foto, m.id).run();
       await auditar(yo, 'portal_perfil', 'musico', m.id, 'el integrante cambió su perfil'); return json({ ok: true });
     }
     if (L.idRaw === 'documentos' && method === 'POST') return guardarDoc(db, ctx, m.id, d, null);
