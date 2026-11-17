@@ -64,4 +64,4 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 ## Lo que sigue
 
 La red interna con fotos (muro) queda en pausa hasta nuevo aviso. Opcional: chat en tiempo real con Durable Objects
-(requiere el plan pago de Workers, 5 USD al mes); hoy se actualiza consultando cada 4 segundos sin costo extra.
+(versión SQLite, disponible en el plan gratis de Workers con límites diarios); hoy se actualiza consultando cada 4 segundos.
