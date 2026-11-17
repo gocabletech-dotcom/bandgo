@@ -2,7 +2,7 @@
 'use strict';
 const ESTADOS = { cotizacion: 'Cotización', negociacion: 'Negociación', pendiente: 'Pendiente de confirmación', confirmado: 'Confirmado', anticipo: 'Anticipo recibido', pendiente_pago: 'Pendiente de pago', realizado: 'Evento realizado', en_cuadre: 'En proceso de cuadre', liquidado: 'Liquidado', cancelado: 'Cancelado' };
 const ESTADOS_MAN = Object.keys(ESTADOS).filter((k) => !['en_cuadre', 'liquidado'].includes(k));
-const COLOR_EST = { cotizacion: 'gr', negociacion: 'av', pendiente: 'az', confirmado: 'ok', anticipo: 'ok', pendiente_pago: 'av', realizado: 'gr', en_cuadre: 'mor', liquidado: 'gr', cancelado: 'mal' };
+const COLOR_EST = { cotizacion: 'gr', negociacion: 'adv', pendiente: 'az', confirmado: 'ok', anticipo: 'ok', pendiente_pago: 'adv', realizado: 'gr', en_cuadre: 'mor', liquidado: 'gr', cancelado: 'mal' };
 const EST_CLASE = { ok: 'ok', av: 'adv', az: 'gr', gr: 'gr', mor: 'mor', mal: 'mal' };
 const estTxt = (e) => `<span class="est ${EST_CLASE[COLOR_EST[e]] || 'gr'}">${esc(ESTADOS[e] || e)}</span>`;
 const hoyISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -153,14 +153,15 @@ async function formEvento(c, e, fechaIni) {
 }
 async function fichaEvento(c, id, pest) {
   const e = await api('eventos/' + id);
-  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ['historial', 'Historial']];
+  const finVer = puede('finanzas.ver') || (e.booking_id === ME.usuario.id);
+  const tabs = [['resumen', 'Resumen'], ['equipo', `Equipo · ${e.equipo.length}`], ...(e.contratos ? [['contrato', 'Contrato']] : []), ...(finVer ? [['finanzas', 'Finanzas']] : []), ...(puede('nomina.ver') || finVer ? [['nomina', 'Nómina']] : []), ...(finVer ? [['cuadre', 'Cuadre']] : []), ['historial', 'Historial']];
   const act = tabs.some((t) => t[0] === pest) ? pest : 'resumen';
   const ag = e.agenda, problemas = ag.bloqueos.length + ag.choques.length + ag.traslados.length;
   c.innerHTML = `<div class="mut peq"><a href="#/eventos">Eventos</a> / ${esc(e.codigo)}</div>
     <div class="card" style="display:flex;flex-wrap:wrap;gap:18px;align-items:center"><div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:6px"><h1>${esc(e.nombre)}</h1>
       <div class="mut">${esc(diaTxt(e.fecha, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))} · ${esc([e.lugar, e.ciudad, e.pais].filter(Boolean).join(', '))} · ${e.tipo === 'publico' ? 'Público' : 'Privado'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${estTxt(e.estado)}${e.banda ? `<span class="tag">${esc(e.banda)}</span>` : ''}${e.booking ? `<span class="tag gris">Booking: ${esc(e.booking)}</span>` : ''}${e.manager ? `<span class="tag gris">Manager: ${esc(e.manager)}</span>` : ''}</div></div>
-      <div class="acc no-print" style="display:flex;gap:8px;flex-wrap:wrap">${e.puede_editar ? `<select id="cest" aria-label="Cambiar estado" style="height:40px;border:1px solid var(--borde2);border-radius:8px;padding:0 10px">${ESTADOS_MAN.map((k) => `<option value="${k}"${e.estado === k ? ' selected' : ''}>${ESTADOS[k]}</option>`).join('')}</select><a class="btn" href="#/eventos/${id}/editar">Editar</a>` : ''}</div></div>
+      <div class="acc no-print" style="display:flex;gap:8px;flex-wrap:wrap">${e.puede_editar && !['en_cuadre', 'liquidado'].includes(e.estado) ? `<select id="cest" aria-label="Cambiar estado" style="height:40px;border:1px solid var(--borde2);border-radius:8px;padding:0 10px">${ESTADOS_MAN.map((k) => `<option value="${k}"${e.estado === k ? ' selected' : ''}>${ESTADOS[k]}</option>`).join('')}</select><a class="btn" href="#/eventos/${id}/editar">Editar</a>` : ''}</div></div>
     ${problemas ? `<div class="aviso adv" style="cursor:pointer" id="vag"><b>Agenda:</b> ${ag.bloqueos.length ? ag.bloqueos.length + ' bloqueo(s) · ' : ''}${ag.choques.length ? ag.choques.length + ' choque(s) · ' : ''}${ag.traslados.length ? ag.traslados.length + ' traslado(s) a revisar · ' : ''}ver detalle</div>` : ''}
     <div class="pestanas" role="tablist">${tabs.map(([k, t]) => `<button role="tab" class="${k === act ? 'act' : ''}" data-t="${k}">${esc(t)}</button>`).join('')}</div><div id="pc"></div>`;
   $$('.pestanas button').forEach((bt) => (bt.onclick = () => { location.hash = `#/eventos/${id}/${bt.dataset.t}`; }));
@@ -202,6 +203,9 @@ async function fichaEvento(c, id, pest) {
       $('#sa', md.el).onclick = async () => { const r = await elegirArchivo('documento'); if (r) { archivo = r.clave; $('#sat', md.el).textContent = 'Archivo listo'; } };
       $('#gf', md.el).onclick = (ev) => trabajando(ev.target, async () => { await api(`contratos/${b.dataset.fir}/estado`, { method: 'PUT', body: { estado: 'firmado', archivo } }); md.cerrar(); toast('Contrato firmado'); fichaEvento(c, id, 'contrato'); }); }));
   }
+  if (act === 'finanzas') return tabFinanzas(pc, e);
+  if (act === 'nomina') return tabNomina(pc, e);
+  if (act === 'cuadre') return tabCuadre(pc, e);
   if (act === 'historial') pc.innerHTML = `<div class="card sin"><div class="desliza"><table class="tabla"><tbody>${e.historial.map((h) => `<tr><td class="mono peq" style="white-space:nowrap">${esc(new Date(h.creado.replace(' ', 'T') + 'Z').toLocaleString('es-DO'))}</td><td>${esc(h.por || '')}</td><td>${esc(h.cambio)}</td></tr>`).join('') || '<tr><td class="vacio">Sin cambios.</td></tr>'}</tbody></table></div></div>`;
 }
 // hoja del contrato para imprimir o guardar como PDF

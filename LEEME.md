@@ -8,7 +8,7 @@ Doble clic en **`tools/Publicar BandGo.bat`**. Hace todo: baja de GitHub, instal
 crea la base `bandgo-db` y el bucket `bandgo-archivos` la primera vez, respalda, migra, publica y crea la llave de cifrado.
 Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
-## Qué hay (v0.1 · Fases 0 y 1)
+## Qué hay (v0.3 · Fases 0 a 3)
 - **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (obligatorio para la plataforma),
   frenos por conexión, Turnstile, avisos de seguridad, cifrado AES-GCM, bitácora, errores, Plataforma (empresas, planes, ajustes, errores),
   varias empresas por usuario, roles (dueño, admin, manager, booking, músico, sonidista, promotor) y permisos por acción que el dueño puede cambiar.
@@ -21,8 +21,16 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
   semana, repertorio, publicar y avisar por correo/WhatsApp, asistencia) y la agenda del músico con «Voy / Tal vez / No voy».
   El booking solo ve los montos de sus propios eventos.
 
+- **Fase 3 · finanzas:** cobros por evento (anticipo y pago final, quién recibió, «entregado» y «el artista confirma que llegó»),
+  gastos del evento por categoría y quién los cubre (lo que paga el cliente no resta), gastos generales con comprobante,
+  multimoneda sin sumar monedas distintas (cada importe guarda su moneda, la tasa, la fecha y la fuente), tasas de cambio,
+  nómina por presentación (sugerida desde el equipo, sustitutos, descuentos, pagos parciales PAG-00001, recibo 80 mm con WhatsApp,
+  el músico confirma o reporta una diferencia desde su portal), comisiones fijas o por porcentaje (aprobar, pagar),
+  y el cuadre: booking envía → manager revisa → artista aprueba o devuelve con observación; al aprobarse queda congelado,
+  el evento pasa a «Liquidado» y cada versión guarda una huella. Reabrir exige un motivo y conserva la versión aprobada.
+
 ## Lo que sigue
-Fase 3 finanzas, nómina y cuadres · Fase 4 giras y viajes ·
+Fase 4 giras y viajes ·
 Fase 5 rider · Fase 6 reportes · Fase 7 comunicados y chat. La red interna con fotos (muro) queda en pausa hasta nuevo aviso.
 
 Detalles técnicos: `docs/TECNICO.md`.

@@ -167,15 +167,15 @@ function vistaSetup() {
 const puede = (p) => ME && ME.permisos && ME.permisos.includes(p);
 const MENU = [
   { g: 'Principal', i: [['inicio', 'Resumen general', 'home'], ['calendario', 'Calendario', 'cal', 0, 'eventos.ver'], ['ensayos', 'Ensayos', 'music', 0, 'ensayos.ver']] },
-  { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 0, 'eventos.ver'], ['clientes', 'Clientes', 'brief', 0, 'clientes.ver'], ['comisiones', 'Comisiones', 'pct', 3]] },
+  { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 0, 'eventos.ver'], ['clientes', 'Clientes', 'brief', 0, 'clientes.ver'], ['comisiones', 'Comisiones', 'pct', 0, 'comisiones.ver']] },
   { g: 'Equipo', i: [['bandas', 'Bandas', 'band', 0, 'bandas.ver'], ['integrantes', 'Integrantes', 'users', 0, 'musicos.ver']] },
-  { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 3], ['nominas', 'Nóminas', 'wallet', 3], ['cuadres', 'Cuadres', 'check', 3], ['gastos', 'Gastos generales', 'receipt', 3]] },
+  { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales']] },
   { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 4], ['itinerarios', 'Itinerarios', 'map', 4], ['rider', 'Rider técnico', 'rider', 5]] },
   { g: 'Comunicación', i: [['comunicados', 'Comunicados y chat', 'chat', 7]] },
   { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 6], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
   const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
@@ -198,7 +198,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b) {
-  const V = { calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
@@ -452,7 +452,7 @@ async function vAuditoria(c) {
 }
 
 // ---------- portal del músico (móvil) ----------
-async function portal(sec) {
+async function portal(sec, arg) {
   let P; try { P = await api('portal'); } catch (e) { $('#root').innerHTML = `<div class="portal"><div class="p-cab">${marca}</div><div class="p-cuerpo" style="margin-top:16px"><div class="aviso adv">${esc(e.message)}</div><button class="btn" id="sl">Cerrar sesión</button></div></div>`; $('#sl').onclick = salir; return; }
   const m = P.musico;
   const tabs = [['inicio', 'Inicio', 'home'], ['agenda', 'Agenda', 'cal'], ['documentos', 'Documentos', 'doc'], ['pago', 'Pagos', 'wallet'], ['perfil', 'Perfil', 'users']];
@@ -467,8 +467,9 @@ async function portal(sec) {
     portalProximo($('#pa'));
   }
   if (sec === 'agenda') return portalAgenda(pc);
+  if (sec === 'recibo' && arg) return vRecibo(pc, arg);
   if (sec === 'documentos') pintarDocs(pc, P.documentos, true, (d, id) => api('portal/documentos' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: d }), null, () => portal('documentos'));
-  if (sec === 'pago') pintarPago(pc, P.cuenta_pago, true, (d) => api('portal/cuenta-pago', { method: 'PUT', body: d }), () => portal('pago'));
+  if (sec === 'pago') { pc.innerHTML = '<div id="mp" style="display:flex;flex-direction:column;gap:12px"></div><div id="dp"></div>'; await portalPagos($('#mp')); pintarPago($('#dp'), P.cuenta_pago, true, (d) => api('portal/cuenta-pago', { method: 'PUT', body: d }), () => portal('pago')); return; }
   if (sec === 'perfil') {
     let foto = null;
     pc.innerHTML = `<form class="card" id="f" style="display:flex;flex-direction:column;gap:14px"><div class="subir"><span id="ft">${fotoAv(m.foto_url, m.nombre, 'g')}</span><button type="button" class="btn chico" id="sf">${ico('cam')} Cambiar mi foto</button></div>

@@ -6,6 +6,7 @@ import { ROLES, ROLES_OFICINA, ROLES_PORTAL, PERMISOS_CAT, FABRICA, permisosDe }
 import { rutasPersonal, invitar } from './personal.js';
 import { rutasPlataforma } from './plataforma.js';
 import { rutasAgenda } from './agenda.js';
+import { rutasFinanzas } from './finanzas.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
@@ -195,6 +196,8 @@ async function api(req, env, url, ectx) {
 
   const ra = await rutasAgenda(L);
   if (ra) return ra;
+  const rf = await rutasFinanzas(L);
+  if (rf) return rf;
   const r = await rutasPersonal(L);
   if (r) return r;
   return err('Ruta no válida', 404);

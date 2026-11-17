@@ -210,7 +210,7 @@ export async function rutasAgenda(L) {
         if (d.fecha !== undefined && !fecha(d.fecha)) return err('Fecha no válida');
         const malo = await validarRefs(db, E, d); if (malo) return err(malo);
         if (d.estado && !ESTADOS_MANUALES.includes(d.estado)) return err('Ese estado lo pone el cuadre');
-        if (['en_cuadre', 'liquidado'].includes(e.estado) && (d.precio !== undefined || d.fecha !== undefined)) return err('El evento está en cuadre: el precio y la fecha ya no se cambian aquí', 409);
+        if (['en_cuadre', 'liquidado'].includes(e.estado) && ((d.precio !== undefined && aCentavos(d.precio) !== e.precio_c) || (d.fecha !== undefined && d.fecha !== e.fecha) || (d.estado && d.estado !== e.estado && d.estado !== 'cancelado'))) return err('El evento está en cuadre o liquidado: el precio, la fecha y el estado se manejan desde el cuadre', 409);
         const n = (k, f) => (d[k] !== undefined ? f(d[k]) : e[k]);
         const nuevo = { fecha: n('fecha', fecha), pais: n('pais', (x) => txt(x, 40)), banda_id: n('banda_id', (x) => Number(x) || null), ini: n('hora_llegada', hora) || n('hora_soundcheck', hora) || n('hora_show', hora), fin: n('hora_fin', hora) };
         if (nuevo.fecha !== e.fecha || nuevo.pais !== e.pais || nuevo.ini !== (e.hora_llegada || e.hora_soundcheck || e.hora_show)) {
