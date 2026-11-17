@@ -1,0 +1,148 @@
+/* BandGo · estilos de la app. Colores del logo: blanco principal, morado secundario (etiquetas), tinta para texto y botones. */
+:root{
+  --blanco:#FFFFFF; --fondo:#F8FAFC; --borde:#E2E8F0; --borde2:#CBD5E1; --suave:#F1F5F9;
+  --tinta:#0F172A; --texto2:#334155; --gris:#64748B; --gris2:#94A3B8;
+  --morado:#9B1FF5; --morado-t:#7C02F7; --morado-c:#F4E8FF; --morado-cc:#FAF5FF; --magenta:#E739FC;
+  --verde:#047857; --verde-c:#ECFDF5; --ambar:#B45309; --ambar-c:#FFFBEB; --rojo:#B91C1C; --rojo-c:#FEF2F2; --azul:#1D4ED8;
+  --r:12px; --r2:8px;
+  --f-tit:'Outfit',system-ui,sans-serif; --f:'Plus Jakarta Sans',system-ui,sans-serif; --f-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fondo);color:var(--tinta);font-family:var(--f);font-size:14px;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:var(--morado-t)} a:hover{color:#5B02B8}
+h1,h2,h3{font-family:var(--f-tit);margin:0;font-weight:600;letter-spacing:-.2px}
+h1{font-size:26px} h2{font-size:16px} h3{font-size:14px}
+.mono{font-family:var(--f-mono)}
+.mut{color:var(--gris)} .peq{font-size:12px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--morado);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* ---------- botones y formularios ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r2);border:1px solid var(--borde2);background:#fff;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;color:var(--tinta);white-space:nowrap}
+.btn:hover{background:var(--suave)}
+.btn.prim{background:var(--tinta);border-color:var(--tinta);color:#fff} .btn.prim:hover{background:#1E293B}
+.btn.mor{background:var(--morado);border-color:var(--morado);color:#fff} .btn.mor:hover{background:var(--morado-t)}
+.btn.peligro{color:var(--rojo);border-color:#FCA5A5}
+.btn.chico{height:32px;padding:0 10px;font-size:13px}
+.btn.bloque{width:100%;height:48px;font-size:15px}
+.btn:disabled{opacity:.55;cursor:default}
+.campo{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.campo input,.campo select,.campo textarea{height:44px;padding:0 12px;border:1px solid var(--borde2);border-radius:var(--r2);background:#fff;font-weight:400;font-size:15px}
+.campo textarea{height:auto;padding:10px 12px;resize:vertical}
+.campo small{font-weight:400;color:var(--gris)}
+.fila{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.fila3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.fila,.fila3{grid-template-columns:1fr}}
+.chk{display:flex;gap:8px;align-items:center;font-weight:500}
+
+/* ---------- etiquetas y estados ---------- */
+.tag{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:600;background:var(--morado-c);color:#6A02D4;white-space:nowrap}
+.tag.gris{background:var(--suave);color:var(--texto2)}
+.est{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;white-space:nowrap}
+.est::before{content:"";width:9px;height:9px;border-radius:99px;border:2.4px solid currentColor;box-sizing:border-box}
+.est.ok{color:var(--verde)} .est.av{color:var(--ambar)} .est.mal{color:var(--rojo)} .est.mor{color:var(--morado-t)} .est.gr{color:var(--gris)}
+.insignia{min-width:18px;padding:1px 6px;border-radius:99px;background:var(--morado);color:#fff;font-family:var(--f-mono);font-size:11px;font-weight:600;text-align:center}
+
+/* ---------- tarjetas ---------- */
+.card{background:#fff;border:1px solid var(--borde);border-radius:var(--r);padding:20px 24px}
+.card.sin{padding:0;overflow:hidden}
+.card-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--borde)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi .t{font-size:12px;font-weight:500;color:var(--gris)} .kpi .v{margin-top:8px;font-family:var(--f-tit);font-size:24px;font-weight:600} .kpi .s{margin-top:4px;font-size:12px;color:var(--gris)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+@media (max-width:1100px){.grid4{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:860px){.grid2,.grid3,.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+.tabla{width:100%;border-collapse:collapse;font-size:14px}
+.tabla th{text-align:left;font-size:12px;font-weight:500;color:var(--gris);background:var(--fondo);padding:10px 12px}
+.tabla td{padding:12px;border-top:1px solid var(--suave);vertical-align:middle}
+.tabla th:first-child,.tabla td:first-child{padding-left:24px} .tabla th:last-child,.tabla td:last-child{padding-right:24px}
+.desliza{overflow-x:auto}
+.vacio{padding:40px 20px;text-align:center;color:var(--gris)}
+.aviso{padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.5}
+.aviso.av{background:var(--ambar-c);color:#78350F} .aviso.mal{background:var(--rojo-c);color:#991B1B} .aviso.ok{background:var(--verde-c);color:#065F46} .aviso.mor{background:var(--morado-cc);color:#4C0390;border:1px solid var(--morado-c)}
+
+/* ---------- avatares y logos ---------- */
+.av{width:36px;height:36px;flex:0 0 36px;border-radius:99px;background:var(--borde);color:var(--texto2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;object-fit:cover;overflow:hidden}
+.av.g{width:88px;height:88px;flex-basis:88px;font-size:26px;font-family:var(--f-tit)}
+.av.m{width:48px;height:48px;flex-basis:48px;font-size:15px}
+.logo-b{width:72px;height:72px;flex:0 0 72px;border-radius:14px;background:var(--morado-c);color:#6A02D4;display:flex;align-items:center;justify-content:center;font-family:var(--f-tit);font-weight:700;font-size:22px;object-fit:contain;overflow:hidden;border:1px solid var(--borde)}
+.logo-b.ch{width:36px;height:36px;flex-basis:36px;border-radius:8px;font-size:12px}
+.marca{display:block;height:32px;width:auto;border-radius:8px;background:#000}
+
+/* ---------- estructura de la oficina ---------- */
+.app{display:flex;min-height:100vh}
+.lateral{width:248px;flex:0 0 248px;background:#fff;border-right:1px solid var(--borde);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.lat-marca{height:64px;padding:0 20px;border-bottom:1px solid var(--borde);display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.lat-marca span{font-family:var(--f-tit);font-weight:700;font-size:19px}
+.lat-emp{padding:14px 20px;border-bottom:1px solid var(--borde);display:flex;gap:10px;align-items:center}
+.lat-emp select{border:0;background:transparent;font-family:var(--f-tit);font-size:16px;font-weight:600;padding:0;max-width:170px}
+.lat-nav{flex:1;padding:8px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.lat-g{padding:12px 12px 4px;font-size:11px;font-weight:600;color:var(--gris);letter-spacing:.4px}
+.lat-i{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:500;color:#475569}
+.lat-i:hover{background:var(--suave);color:var(--tinta)}
+.lat-i.act{background:var(--tinta);color:#fff}
+.lat-i.fut{color:var(--gris2);cursor:default} .lat-i.fut:hover{background:transparent;color:var(--gris2)}
+.lat-i .fase{margin-left:auto;font-size:10px;font-weight:600;color:var(--gris2);font-family:var(--f-mono)}
+.lat-i svg{flex:0 0 16px}
+.lat-pie{padding:12px 16px;border-top:1px solid var(--borde)}
+.principal{flex:1;min-width:0;display:flex;flex-direction:column}
+.superior{height:64px;background:#fff;border-bottom:1px solid var(--borde);padding:0 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:5}
+.ruta{display:flex;align-items:center;gap:8px;font-size:14px;min-width:0}
+.ruta b{font-family:var(--f-tit);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.usr{display:flex;align-items:center;gap:10px}
+.usr .n{display:flex;flex-direction:column;line-height:1.2} .usr .n b{font-size:13px} .usr .n span{font-size:11px;color:var(--gris)}
+.contenido{padding:28px 32px 48px;display:flex;flex-direction:column;gap:22px;max-width:1360px;width:100%}
+.cab{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.cab .acc{display:flex;gap:10px;flex-wrap:wrap}
+.menu-btn{display:none}
+@media (max-width:900px){
+  .lateral{position:fixed;left:0;top:0;z-index:30;transform:translateX(-100%);transition:transform .2s;box-shadow:0 0 40px rgba(15,23,42,.2)}
+  .lateral.abierto{transform:none}
+  .menu-btn{display:inline-flex}
+  .superior{padding:0 16px} .contenido{padding:20px 16px 40px}
+  .usr .n{display:none}
+}
+.pestanas{display:flex;gap:4px;border-bottom:1px solid var(--borde);flex-wrap:wrap}
+.pestanas button{height:42px;padding:0 14px;border:0;border-bottom:3px solid transparent;background:transparent;font-weight:600;color:var(--gris);cursor:pointer}
+.pestanas button.act{color:var(--tinta);border-bottom-color:var(--morado)}
+
+/* ---------- entrada (login) ---------- */
+.entrada{min-height:100vh;display:flex;flex-wrap:wrap;background:#fff}
+.entrada-arte{flex:1 1 520px;min-height:360px;background:#000;color:#fff;padding:40px;display:flex;flex-direction:column;justify-content:space-between;gap:28px;position:relative;overflow:hidden}
+.entrada-arte img.foto{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+.entrada-arte > *{position:relative}
+.entrada-arte .lema{font-family:var(--f-tit);font-size:38px;font-weight:700;line-height:1.1;letter-spacing:-.8px;max-width:520px}
+.entrada-arte .lema span{color:#C77DFF}
+.entrada-form{flex:1 1 420px;display:flex;align-items:center;justify-content:center;padding:40px 24px}
+.entrada-form form,.entrada-form .caja{width:100%;max-width:400px;display:flex;flex-direction:column;gap:16px}
+.sep{display:flex;align-items:center;gap:12px;color:var(--gris);font-size:13px} .sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--borde)}
+
+/* ---------- modal y avisos ---------- */
+.velo{position:fixed;inset:0;background:rgba(2,6,23,.5);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow-y:auto}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:620px;box-shadow:0 20px 60px rgba(2,6,23,.3)}
+.modal-h{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--borde)}
+.modal-c{padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.modal-p{padding:14px 22px;border-top:1px solid var(--borde);display:flex;justify-content:flex-end;gap:10px}
+.x{width:36px;height:36px;border-radius:8px;border:0;background:transparent;font-size:22px;cursor:pointer;color:var(--gris)}
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--tinta);color:#fff;padding:12px 16px;border-radius:10px;font-size:14px;box-shadow:0 10px 30px rgba(2,6,23,.25);max-width:90vw}
+.toast.mal{background:#991B1B}
+
+/* ---------- subir imagen ---------- */
+.subir{display:flex;align-items:center;gap:14px}
+.subir input[type=file]{display:none}
+
+/* ---------- portal del músico (móvil) ---------- */
+.portal{max-width:520px;margin:0 auto;min-height:100vh;background:var(--fondo);display:flex;flex-direction:column}
+.p-cab{background:#000;color:#fff;padding:20px 18px 64px;display:flex;align-items:center;gap:12px}
+.p-cab .av{border:2px solid var(--morado)}
+.p-cuerpo{flex:1;padding:0 14px 110px;margin-top:-46px;display:flex;flex-direction:column;gap:12px}
+.p-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;height:76px;background:#fff;border-top:1px solid var(--borde);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:8px 6px 16px}
+.p-tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:600;color:var(--gris);text-decoration:none}
+.p-tabs a span.i{width:44px;height:28px;border-radius:99px;display:flex;align-items:center;justify-content:center}
+.p-tabs a.act{color:var(--tinta)} .p-tabs a.act span.i{background:var(--morado-c);color:#6A02D4}

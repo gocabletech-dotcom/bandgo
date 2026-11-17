@@ -1,0 +1,16 @@
+{
+  "name": "bandgo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BandGo — SaaS para agrupaciones musicales (Cloudflare Workers + D1 + R2)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 migrations apply bandgo-db --local",
+    "db:remote": "wrangler d1 migrations apply bandgo-db --remote",
+    "pruebas": "node tools/pruebas.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

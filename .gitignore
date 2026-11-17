@@ -1,0 +1,9 @@
+node_modules
+.wrangler/
+wrangler.jsonc
+.dev.vars
+.env*
+*.log
+desktop/dist/
+desktop/out/
+desktop/app/

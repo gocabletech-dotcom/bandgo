@@ -1,0 +1,149 @@
+// BandGo · pruebas automáticas con una base LOCAL y TEMPORAL (se crea y se borra aquí). Nunca toca producción.
+// Uso: node tools/pruebas.mjs   — sale con 0 si todo pasó y 1 si algo falló. «Publicar BandGo.bat» la corre antes de publicar.
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, existsSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
+const WIN = process.platform === 'win32';
+const PUERTO = 8891, FALSO = 8897, B = `http://127.0.0.1:${PUERTO}`;
+if (!existsSync(join(RAIZ, 'wrangler.jsonc'))) copyFileSync(join(RAIZ, 'wrangler.ejemplo.jsonc'), join(RAIZ, 'wrangler.jsonc'));
+const DATOS = mkdtempSync(join(tmpdir(), 'bandgo-pruebas-'));
+const FILTRADA = 'Estelares-Filtrada-2024';
+let bien = 0, mal = 0; const fallas = [];
+const t = (ok, msg, extra) => { if (ok) { bien++; console.log('  \x1b[32m✓\x1b[0m ' + msg); } else { mal++; fallas.push(msg); console.log('  \x1b[31m✗ ' + msg + '\x1b[0m' + (extra ? '\n      ' + JSON.stringify(extra).slice(0, 400) : '')); } };
+const titulo = (s) => console.log('\n\x1b[33m' + s + '\x1b[0m');
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// servicio falso de contraseñas filtradas (como api.pwnedpasswords.com)
+const falso = createServer((req, res) => {
+  if (req.url.startsWith('/range/')) { const pre = req.url.slice(7, 12).toUpperCase(), h = createHash('sha1').update(FILTRADA).digest('hex').toUpperCase();
+    res.writeHead(200, { 'content-type': 'text/plain' }); return res.end((pre === h.slice(0, 5) ? h.slice(5) + ':52\r\n' : '') + '0000000000000000000000000000000000A:0'); }
+  res.writeHead(404); res.end();
+}).listen(FALSO, '127.0.0.1');
+
+const WRANGLER = join(RAIZ, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+const ENV = { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' };
+let wr = null;
+function apagar() {
+  try { if (wr && !wr.killed) { if (WIN) spawnSync('taskkill', ['/pid', String(wr.pid), '/T', '/F'], { stdio: 'ignore' }); else process.kill(-wr.pid, 'SIGTERM'); } } catch {}
+  try { falso.close(); } catch {}
+  try { rmSync(DATOS, { recursive: true, force: true }); } catch {}
+}
+const sql = (q) => { const r = spawnSync(process.execPath, [WRANGLER, 'd1', 'execute', 'bandgo-db', '--local', '--persist-to', DATOS, '--json', '--command', q], { cwd: RAIZ, encoding: 'utf8', env: ENV }); try { return JSON.parse(r.stdout)[0].results; } catch { throw new Error(r.stderr || r.stdout); } };
+
+const cliente = () => { const jar = {}; const f = async (ruta, o = {}) => {
+  const r = await fetch(B + (ruta.startsWith('/') ? ruta : '/api/' + ruta), { method: o.method || 'GET', redirect: 'manual', headers: { 'content-type': 'application/json', ...(o.sinCsrf ? {} : { 'x-requested-with': 'bg' }), cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; '), ...(o.headers || {}) }, body: o.body ? JSON.stringify(o.body) : undefined });
+  for (const c of r.headers.getSetCookie()) { const [kv] = c.split(';'); const i = kv.indexOf('='); jar[kv.slice(0, i)] = kv.slice(i + 1); }
+  const ct = r.headers.get('content-type') || ''; let j = {};
+  if (ct.includes('json')) { try { j = await r.json(); } catch {} } else { j = { _bytes: (await r.arrayBuffer()).byteLength, _tipo: ct, _csp: r.headers.get('content-security-policy') }; }
+  return { s: r.status, j }; }; return f; };
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const CLAVE = 'una frase larga de prueba 2026';
+
+async function main() {
+  titulo('Preparando una base temporal');
+  const m = spawnSync(process.execPath, [WRANGLER, 'd1', 'migrations', 'apply', 'bandgo-db', '--local', '--persist-to', DATOS], { cwd: RAIZ, encoding: 'utf8', env: ENV });
+  t(m.status === 0, 'migraciones aplicadas en la base temporal', m.stderr.slice(-500));
+  const vars = ['BANDGO_LLAVE:llave-maestra-de-prueba-0123456789-abcdef', 'DOS_PASOS_OPCIONAL:1', `PWNED_API:http://127.0.0.1:${FALSO}`, 'BANDGO_VERSION:pruebas'];
+  wr = spawn(process.execPath, [WRANGLER, 'dev', '--local', '--port', String(PUERTO), '--ip', '127.0.0.1', '--persist-to', DATOS, ...vars.flatMap((v) => ['--var', v])], { cwd: RAIZ, detached: !WIN, env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = ''; wr.stdout.on('data', (d) => (log += d)); wr.stderr.on('data', (d) => (log += d));
+  let listo = false; for (let i = 0; i < 90 && !listo; i++) { try { listo = (await fetch(B + '/api/ping')).ok; } catch {} if (!listo) await esperar(1000); }
+  if (!listo) { console.log(log.slice(-3000)); throw new Error('wrangler dev no arrancó'); }
+
+  titulo('Plataforma y entrada');
+  const S = cliente(), A = cliente(), Bc = cliente();
+  t((await S('setup')).j.necesita_setup === true, 'pide crear el superadministrador la primera vez');
+  t((await S('setup', { method: 'POST', body: { nombre: 'Plataforma', email: 'plataforma@bandgo.local', password: 'corta' } })).s === 400, 'rechaza contraseñas cortas');
+  t((await S('setup', { method: 'POST', body: { nombre: 'Plataforma', email: 'plataforma@bandgo.local', password: FILTRADA } })).s === 400, 'rechaza contraseñas filtradas');
+  t((await S('setup', { method: 'POST', body: { nombre: 'Plataforma', email: 'plataforma@bandgo.local', password: CLAVE } })).s === 201, 'crea el superadministrador');
+  t((await S('setup', { method: 'POST', body: { nombre: 'Otro', email: 'x@bandgo.local', password: CLAVE } })).s === 403, 'no deja crear un segundo superadministrador por setup');
+  const h = await fetch(B + '/app/'); t(h.ok && (h.headers.get('content-security-policy') || '').includes("default-src 'self'"), 'la app sale con cabeceras de seguridad (CSP)');
+
+  let r = await A('registro', { method: 'POST', body: { empresa: 'Los Estelares', nombre: 'Rafael Durán', email: 'rafael@bandgo.local', password: CLAVE, pais: 'DO', acepta: true } });
+  t(r.s === 200 && r.j.ok, 'registra la empresa A con su dueño', r.j);
+  r = await Bc('registro', { method: 'POST', body: { empresa: 'Orquesta Rival', nombre: 'Beto', email: 'beto@bandgo.local', password: CLAVE, pais: 'US', acepta: true } });
+  t(r.s === 200, 'registra la empresa B');
+  t((await A('registro', { method: 'POST', body: { empresa: 'X', nombre: 'X', email: 'rafael@bandgo.local', password: CLAVE, acepta: true } })).s === 400, 'no repite correos');
+  r = await A('me'); t(r.j.rol === 'dueno' && r.j.empresa.plan.clave === 'prueba' && !!r.j.empresa.prueba_hasta, 'el dueño entra con prueba gratis', r.j);
+  const X = cliente(); t((await X('login', { method: 'POST', body: { email: 'rafael@bandgo.local', password: 'equivocada 123456' } })).s === 401, 'contraseña equivocada no entra');
+  t((await X('login', { method: 'POST', body: { email: 'rafael@bandgo.local', password: CLAVE } })).s === 200, 'contraseña correcta entra');
+  t((await X('logout', { method: 'POST' })).s === 200 && (await X('me')).s === 401, 'cerrar sesión borra la sesión');
+  t((await A('bandas', { method: 'POST', sinCsrf: true, body: { nombre: 'Sin encabezado' } })).s === 403, 'rechaza cambios sin el encabezado anti-CSRF');
+
+  titulo('Bandas, integrantes, fotos y documentos');
+  r = await A('archivos', { method: 'POST', body: { tipo: 'logo_banda', datos: PNG } }); const logo = r.j.clave;
+  t(r.s === 201 && /^e\/\d+\/logo_banda\//.test(logo), 'sube el logo de la banda a R2', r.j);
+  r = await A('bandas', { method: 'POST', body: { nombre: 'Banda RD', categoria: 'Banda RD', moneda: 'DOP', logo } }); const bandaId = r.j.id;
+  t(r.s === 201, 'crea la banda con logo');
+  r = await A('archivos', { method: 'POST', body: { tipo: 'foto_musico', datos: PNG } }); const foto = r.j.clave;
+  r = await A('musicos', { method: 'POST', body: { nombre: 'José Martínez', instrumento: 'Trompeta', email: 'jose@bandgo.local', whatsapp: '18095550188', tarifa: '250.50', tarifa_moneda: 'USD', foto, bandas: [bandaId] } }); const musId = r.j.id;
+  t(r.s === 201, 'crea el integrante con foto y banda');
+  r = await A('musicos/' + musId); t(r.j.tarifa === 250.5 && r.j.foto_url && r.j.bandas[0].id === bandaId, 'guarda la tarifa en centavos y la devuelve bien', r.j);
+  t((await A(r.j.foto_url)).j._tipo === 'image/png', 'la foto se sirve desde R2 con sesión');
+  r = await A(`musicos/${musId}/documentos`, { method: 'POST', body: { tipo: 'pasaporte', pais: 'República Dominicana', numero: 'RD1234567', emision: '2020-01-10', vence: new Date(Date.now() + 50 * 864e5).toISOString().slice(0, 10) } });
+  t(r.s === 200, 'registra el pasaporte');
+  t(sql(`SELECT numero_cif FROM documentos_viaje WHERE musico_id = ${musId}`)[0].numero_cif.startsWith('enc:v1:'), 'el número del pasaporte queda cifrado en la base');
+  r = await A(`musicos/${musId}/documentos`); t(r.j[0].numero === 'RD1234567' && r.j[0].alerta.nivel === 'urgente', 'el dueño ve el número completo y la alerta de vencimiento', r.j);
+  t((await A('alertas')).j.length === 1, 'aparece en las alertas de documentos');
+  r = await A(`musicos/${musId}/cuenta-pago`, { method: 'PUT', body: { banco: 'Banco Popular', titular: 'José Martínez', numero: '7894561234417', tipo_cuenta: 'Ahorros', zelle: 'jose@correo.com' } });
+  t(r.s === 200 && (await A(`musicos/${musId}/cuenta-pago`)).j.numero === '•••• 4417', 'datos de pago cifrados y enmascarados');
+
+  titulo('Aislamiento entre empresas');
+  t((await Bc('musicos/' + musId)).s === 404, 'la empresa B no ve el integrante de A');
+  t((await Bc('bandas/' + bandaId)).s === 404, 'la empresa B no ve la banda de A');
+  t((await Bc('bandas/' + bandaId, { method: 'PUT', body: { nombre: 'Robada' } })).s === 404, 'la empresa B no puede editar la banda de A');
+  t((await Bc('/api/archivo/' + encodeURIComponent(foto))).s === 404, 'la empresa B no puede abrir la foto de A');
+  t((await Bc(`musicos/${musId}/documentos`)).s === 404, 'la empresa B no ve los documentos de A');
+  t((await Bc('bandas', { method: 'POST', body: { nombre: 'Con logo ajeno', logo } })).s === 400, 'la empresa B no puede usar un archivo de A');
+  t((await Bc('musicos')).j.length === 0 && (await Bc('bandas')).j.length === 0, 'la lista de B está vacía');
+
+  titulo('Roles y permisos');
+  r = await A('usuarios', { method: 'POST', body: { email: 'carlos@bandgo.local', nombre: 'Carlos Mejía', rol: 'booking' } });
+  t(r.s === 200 && r.j.enlace, 'invita a un booking (enlace sin correo activado)', r.j);
+  const K = cliente(); const tk = r.j.enlace.split('/').pop();
+  t((await K('invitacion/' + tk)).j.rol === 'Booking', 'la invitación dice el rol');
+  t((await K('invitacion/' + tk, { method: 'POST', body: { nombre: 'Carlos Mejía', password: CLAVE } })).s === 200, 'el booking crea su contraseña');
+  t((await K('invitacion/' + tk, { method: 'POST', body: { nombre: 'Otra vez', password: CLAVE } })).s === 404, 'la invitación no se usa dos veces');
+  t((await K('bandas')).s === 200, 'el booking ve las bandas');
+  t((await K('bandas', { method: 'POST', body: { nombre: 'No debe' } })).s === 403, 'el booking no crea bandas');
+  r = await K('musicos/' + musId); t(r.j.documentos === null && r.j.direccion === undefined && r.j.cuenta_pago === null, 'el booking no ve documentos, datos privados ni de pago', r.j);
+  t((await K(`musicos/${musId}/documentos`)).s === 403, 'el booking no abre los documentos');
+  t((await K('permisos', { method: 'PUT', body: { rol: 'booking', permiso: 'bandas.crear', permitido: true } })).s === 403, 'el booking no cambia permisos');
+  t((await A('permisos', { method: 'PUT', body: { rol: 'booking', permiso: 'bandas.crear', permitido: true } })).s === 200, 'el dueño le da «crear bandas» al booking');
+  t((await K('bandas', { method: 'POST', body: { nombre: 'Banda USA' } })).s === 201, 'ahora el booking sí crea bandas');
+
+  titulo('Portal del músico');
+  r = await A(`musicos/${musId}/invitar`, { method: 'POST' }); t(r.s === 200 && r.j.enlace, 'la oficina da acceso al portal');
+  const P = cliente(); t((await P('invitacion/' + r.j.enlace.split('/').pop(), { method: 'POST', body: { nombre: 'José', password: CLAVE } })).s === 200, 'el músico crea su contraseña');
+  r = await P('me'); t(r.j.portal === true && r.j.rol === 'musico', 'el músico entra a su portal');
+  r = await P('portal'); t(r.j.musico.id === musId && r.j.documentos[0].numero === 'RD1234567' && r.j.cuenta_pago.numero === '7894561234417', 've lo suyo completo', r.j);
+  t((await P('musicos')).s === 403 && (await P('bandas')).s === 403 && (await P('usuarios')).s === 403, 'no ve la oficina');
+  t((await P('/api/archivo/' + encodeURIComponent(foto))).s === 200, 've su propia foto');
+  t((await P('portal/perfil', { method: 'PUT', body: { telefono: '8095551111', emergencia_nombre: 'María' } })).s === 200, 'actualiza su perfil');
+  t((await P('portal/documentos', { method: 'POST', body: { tipo: 'visa', pais: 'Estados Unidos', clase: 'B1/B2', numero: 'V998877', vence: '2029-05-01' } })).s === 200, 'agrega su visa');
+
+  titulo('Plataforma, suspensión y prueba vencida');
+  t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
+  r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j);
+  t((await S('bandas')).s === 403, 'la plataforma no opera empresas');
+  t([403, 404].includes((await A('plataforma/empresas')).s), 'el dueño no entra a la plataforma');
+  const idB = r.j.find((e) => e.nombre === 'Orquesta Rival').id, idA = r.j.find((e) => e.nombre === 'Los Estelares').id;
+  t((await S('plataforma/empresas/' + idB, { method: 'PUT', body: { estado: 'suspendida' } })).s === 200, 'suspende la empresa B');
+  t((await Bc('me')).s === 401, 'la empresa suspendida pierde la sesión');
+  t((await S('plataforma/empresas/' + idA, { method: 'PUT', body: { prueba_hasta: '2020-01-01' } })).s === 200, 'vence la prueba de A');
+  t((await A('bandas', { method: 'POST', body: { nombre: 'Después de la prueba' } })).s === 402, 'con la prueba vencida no se hacen cambios');
+  t((await A('bandas')).s === 200, 'pero se puede ver todo');
+  t(sql("SELECT COUNT(*) n FROM auditoria WHERE accion IN ('banda_creada','musico_creado','documento_creado','cuenta_pago_cambiada','permiso_cambiado')")[0].n >= 5, 'la bitácora registró los cambios');
+}
+
+const reloj = setTimeout(() => { console.log('\nSe pasó del tiempo'); apagar(); process.exit(1); }, 5 * 60 * 1000);
+main().catch((e) => { mal++; fallas.push(e.message); console.error(e); }).finally(() => {
+  clearTimeout(reloj); apagar();
+  console.log(`\n${mal ? '\x1b[31m' : '\x1b[32m'}${bien} bien · ${mal} mal\x1b[0m`); if (mal) console.log('Fallaron:\n - ' + fallas.join('\n - '));
+  process.exit(mal ? 1 : 0);
+});
