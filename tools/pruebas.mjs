@@ -49,7 +49,7 @@ async function main() {
   titulo('Preparando una base temporal');
   const m = spawnSync(process.execPath, [WRANGLER, 'd1', 'migrations', 'apply', 'bandgo-db', '--local', '--persist-to', DATOS], { cwd: RAIZ, encoding: 'utf8', env: ENV });
   t(m.status === 0, 'migraciones aplicadas en la base temporal', m.stderr.slice(-500));
-  const vars = ['BANDGO_LLAVE:llave-maestra-de-prueba-0123456789-abcdef', 'DOS_PASOS_OPCIONAL:1', `PWNED_API:http://127.0.0.1:${FALSO}`, 'BANDGO_VERSION:pruebas'];
+  const vars = ['BANDGO_LLAVE:llave-maestra-de-prueba-0123456789-abcdef', `PWNED_API:http://127.0.0.1:${FALSO}`, 'BANDGO_VERSION:pruebas'];
   wr = spawn(process.execPath, [WRANGLER, 'dev', '--local', '--port', String(PUERTO), '--ip', '127.0.0.1', '--persist-to', DATOS, ...vars.flatMap((v) => ['--var', v])], { cwd: RAIZ, detached: !WIN, env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; wr.stdout.on('data', (d) => (log += d)); wr.stderr.on('data', (d) => (log += d));
   let listo = false; for (let i = 0; i < 90 && !listo; i++) { try { listo = (await fetch(B + '/api/ping')).ok; } catch {} if (!listo) await esperar(1000); }
@@ -399,10 +399,18 @@ async function main() {
 
   titulo('Plataforma, suspensión y prueba vencida');
   t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
-  r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j);
+  r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j); const listaInicial = r.j;
   t((await S('bandas')).s === 403, 'la plataforma no opera empresas');
   t([403, 404].includes((await A('plataforma/empresas')).s), 'el dueño no entra a la plataforma');
-  const idB = r.j.find((e) => e.nombre === 'Orquesta Rival').id, idA = r.j.find((e) => e.nombre === 'Los Estelares').id;
+  const idB = listaInicial.find((e) => e.nombre === 'Orquesta Rival').id, idA = listaInicial.find((e) => e.nombre === 'Los Estelares').id;
+  t((await S('me')).j.dos_pasos === false && (await S('plataforma/resumen')).s === 200, 'la plataforma funciona sin activar dos pasos (es opcional)');
+  t((await S('plataforma/empresas', { method: 'POST', body: { nombre: 'Banda Nueva', dueno_nombre: 'Ana Dueña', dueno_email: 'malo' } })).s === 400, 'pide un correo válido para el dueño');
+  t((await S('plataforma/empresas', { method: 'POST', body: { nombre: 'Banda Nueva', dueno_nombre: 'Ana', dueno_email: 'plataforma@bandgo.local' } })).s === 400, 'no usa el correo de la plataforma para un dueño');
+  r = await S('plataforma/empresas', { method: 'POST', body: { nombre: 'Banda Nueva', pais: 'US', plan: 'basico', dueno_nombre: 'Ana Dueña', dueno_email: 'ana@nueva.local' } });
+  t(r.s === 201 && r.j.enlace.includes('#/invitacion/'), 'la plataforma crea una empresa y el enlace para el dueño', r.j);
+  const NV = cliente(); r = await NV('invitacion/' + r.j.enlace.split('/').pop(), { method: 'POST', body: { nombre: 'Ana Dueña', password: CLAVE } });
+  r = await NV('me'); t(r.s === 200 && r.j.rol === 'dueno' && r.j.empresa.nombre === 'Banda Nueva', 'el dueño crea su contraseña y entra a su empresa', r.j);
+  t((await NV('bandas', { method: 'POST', body: { nombre: 'Primera banda' } })).s === 201, 'el dueño nuevo trabaja sin activar dos pasos');
   t((await S('plataforma/empresas/' + idB, { method: 'PUT', body: { estado: 'suspendida' } })).s === 200, 'suspende la empresa B');
   t((await Bc('me')).s === 401, 'la empresa suspendida pierde la sesión');
   t((await S('plataforma/empresas/' + idA, { method: 'PUT', body: { prueba_hasta: '2020-01-01' } })).s === 200, 'vence la prueba de A');

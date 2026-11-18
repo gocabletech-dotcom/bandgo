@@ -13,7 +13,8 @@ export const COOKIE = 'bg_session';
 const COOKIE_EQ = 'bg_eq';
 // una sesión sin uso vence: oficina 4 horas, portal del músico 14 días (lo usa en el teléfono)
 export const INACTIVO_MS = { oficina: 4 * 3600e3, portal: 14 * 86400e3 };
-export const dosPasosObligatorio = (env, u) => !!u.superadmin && env.DOS_PASOS_OPCIONAL !== '1';
+// La verificación en dos pasos es opcional (recomendada). Para exigirla a la plataforma: variable DOS_PASOS_OBLIGATORIO = 1.
+export const dosPasosObligatorio = (env, u) => !!u.superadmin && env.DOS_PASOS_OBLIGATORIO === '1';
 
 export async function crearUsuario(db, d) {
   const salt = rnd(16);

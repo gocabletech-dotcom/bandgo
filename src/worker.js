@@ -64,7 +64,7 @@ async function api(req, env, url, ectx) {
     if (mod === 'me') return json({ usuario: user, plataforma: true, dos_pasos: await estado2fa(db, user.id), dos_pasos_obligatorio: dosPasosObligatorio(env, user) });
     if (mod === 'plataforma') {
       if (dosPasosObligatorio(env, user) && !(await estado2fa(db, user.id))) return err('Active primero la verificación en dos pasos en Mi cuenta.', 403, { codigo: 'requiere_2fa' });
-      return rutasPlataforma({ db, method, partes: partes.slice(1), d, ctx });
+      return rutasPlataforma({ db, env, url, method, partes: partes.slice(1), d, ctx });
     }
     return err('La plataforma no opera empresas. Entre con un usuario de la empresa.', 403);
   }

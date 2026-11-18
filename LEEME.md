@@ -9,7 +9,7 @@ crea la base `bandgo-db` y el bucket `bandgo-archivos` la primera vez, respalda,
 Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
 ## Qué hay (v0.7 · Fases 0 a 7)
-- **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (obligatorio para la plataforma),
+- **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (opcional y recomendado; para exigirlo a la plataforma, variable DOS_PASOS_OBLIGATORIO = 1), la plataforma crea empresas y manda el enlace al dueño,
   frenos por conexión, Turnstile, avisos de seguridad, cifrado AES-GCM, bitácora, errores, Plataforma (empresas, planes, ajustes, errores),
   varias empresas por usuario, roles (dueño, admin, manager, booking, músico, sonidista, promotor) y permisos por acción que el dueño puede cambiar.
 - **Fase 1 · personal:** bandas con logo, integrantes con foto, pasaportes y visas cifrados con alertas (180/90/60/30 días),

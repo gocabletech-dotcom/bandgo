@@ -12,7 +12,7 @@ const textoChat = (t) => esc(t || '').replace(/(https?:\/\/[^\s<]+)/g, '<a href=
 // ---------- insignias de pendientes (menú de la oficina y pestaña del portal) ----------
 let relojPend = null;
 async function revisarPendientes() {
-  if (typeof ME === 'undefined' || !ME || document.hidden) return;
+  if (typeof ME === 'undefined' || !ME || ME.plataforma || !ME.usuario || document.hidden) return;
   try {
     const p = await api('mensajes/pendientes');
     const pon = (sel, n) => $$(sel).forEach((el) => { let b = $('.insignia', el); if (!n) { b?.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'insignia'; el.append(b); } b.textContent = n > 99 ? '99+' : n; });

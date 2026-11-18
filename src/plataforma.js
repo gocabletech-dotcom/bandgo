@@ -1,10 +1,13 @@
 // BandGo · Plataforma (solo superadministrador): empresas, planes, ajustes y errores. Igual que la Plataforma de FoodPOS.
-import { json, err, txt, emailOk, cifrar, auditar, fecha } from './nucleo.js';
+import { json, err, txt, emailOk, cifrar, auditar, fecha, sha256, escHtml, enviarCorreo, correoBase, cfgCorreo } from './nucleo.js';
+import { crearEmpresa } from './auth.js';
+
+const rnd = (n) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); };
 
 const SECRETAS = ['resend_clave', 'turnstile_secreto'];
 const AJUSTES = ['registro_abierto', 'prueba_dias', 'correo_desde', 'turnstile_sitio', ...SECRETAS];
 
-export async function rutasPlataforma({ db, method, partes, d, ctx }) {
+export async function rutasPlataforma({ db, env, url, method, partes, d, ctx }) {
   const [que, idRaw] = partes; const id = Number(idRaw) || null;
   if (que === 'resumen' && method === 'GET') {
     const [e, p, u, m, b, a] = await db.batch([
@@ -25,6 +28,35 @@ export async function rutasPlataforma({ db, method, partes, d, ctx }) {
       (SELECT COALESCE(SUM(bytes),0) FROM archivos a WHERE a.empresa_id = e.id) bytes,
       (SELECT u.email FROM miembros x JOIN usuarios u ON u.id = x.usuario_id WHERE x.empresa_id = e.id AND x.rol = 'dueno' LIMIT 1) dueno
       FROM empresas e ORDER BY e.creado DESC`).all()).results);
+  }
+  // la plataforma crea la empresa y le manda al dueño un enlace para crear su contraseña (vale 7 días)
+  if (que === 'empresas' && method === 'POST' && !id) {
+    const nombre = txt(d.nombre, 80); if (!nombre) return err('Escriba el nombre de la agrupación');
+    const email = String(d.dueno_email || '').toLowerCase().trim(); if (!emailOk(email)) return err('Escriba un correo válido para el dueño');
+    const duenoNombre = txt(d.dueno_nombre, 80); if (!duenoNombre) return err('Escriba el nombre del dueño');
+    const yaSuper = await db.prepare('SELECT 1 FROM usuarios WHERE email = ? AND superadmin = 1').bind(email).first();
+    if (yaSuper) return err('Ese correo es el de la plataforma. Use otro correo para el dueño de la empresa.');
+    const e = await crearEmpresa(db, { nombre, pais: d.pais, telefono: d.telefono, email });
+    if (d.plan && (await db.prepare('SELECT 1 FROM planes WHERE clave = ?').bind(d.plan).first())) await db.prepare('UPDATE empresas SET plan = ? WHERE id = ?').bind(d.plan, e.id).run();
+    const t = rnd(24);
+    await db.prepare('INSERT INTO invitaciones (token, empresa_id, email, nombre, rol, expira, creado_por) VALUES (?,?,?,?,?,?,?)').bind(await sha256(t), e.id, email, duenoNombre, 'dueno', new Date(Date.now() + 7 * 864e5).toISOString(), ctx.user.id).run();
+    const enlace = `${url.origin}/app/#/invitacion/${t}`;
+    let enviado = false;
+    if ((await cfgCorreo(env, db)).listo) {
+      try { await enviarCorreo(env, db, { para: email, asunto: `Su cuenta de BandGo para ${nombre}`, html: correoBase(`Bienvenido a BandGo`, `<p>Hola ${escHtml(duenoNombre.split(' ')[0])}: ya está creada la cuenta de <b>${escHtml(nombre)}</b> en BandGo.</p><p>Toque el botón para crear su contraseña (el enlace vale 7 días).</p><p><a href="${enlace}" style="background:#0F172A;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Crear mi contraseña</a></p>`) }); enviado = true; }
+      catch (er) { console.error('empresa nueva', er.message); }
+    }
+    await auditar({ ...ctx, empresa: { id: e.id } }, 'plataforma_empresa_creada', 'empresa', e.id, `${nombre} · dueño ${email}`);
+    return json({ ok: true, id: e.id, enlace, enviado, prueba_hasta: e.prueba_hasta }, 201);
+  }
+  if (que === 'empresas' && method === 'POST' && id && idRaw && partes[2] === 'invitar') {
+    const e = await db.prepare('SELECT * FROM empresas WHERE id = ?').bind(id).first(); if (!e) return err('No encontrada', 404);
+    const email = String(d.dueno_email || '').toLowerCase().trim(); if (!emailOk(email)) return err('Escriba un correo válido');
+    await db.prepare("DELETE FROM invitaciones WHERE empresa_id = ? AND email = ? AND usado = 0").bind(id, email).run();
+    const t = rnd(24);
+    await db.prepare('INSERT INTO invitaciones (token, empresa_id, email, nombre, rol, expira, creado_por) VALUES (?,?,?,?,?,?,?)').bind(await sha256(t), id, email, txt(d.dueno_nombre, 80), 'dueno', new Date(Date.now() + 7 * 864e5).toISOString(), ctx.user.id).run();
+    await auditar({ ...ctx, empresa: { id } }, 'plataforma_invitacion_dueno', 'empresa', id, email);
+    return json({ ok: true, enlace: `${url.origin}/app/#/invitacion/${t}` });
   }
   if (que === 'empresas' && method === 'PUT' && id) {
     const e = await db.prepare('SELECT * FROM empresas WHERE id = ?').bind(id).first(); if (!e) return err('No encontrada', 404);
