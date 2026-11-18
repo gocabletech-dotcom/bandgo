@@ -6,37 +6,100 @@ const EST_R = { borrador: ['gr', 'Borrador'], vigente: ['ok', 'Vigente'], archiv
 const SOP_T = { '': '—', alto: 'Pedestal alto', bajo: 'Pedestal bajo', clip: 'Clip', mesa: 'Mesa' };
 const MEZ_T = { cuna: 'Cuña', iem_estereo: 'In-ear estéreo', iem_mono: 'In-ear mono', sidefill: 'Side fill' };
 const SEC_T = [['consola', 'Consola (FOH)'], ['monitores', 'Monitores'], ['microfonia', 'Microfonía'], ['di_backline', 'DI boxes y backline'], ['energia', 'Energía eléctrica'], ['escenario', 'Escenario'], ['instrucciones', 'Instrucciones generales']];
-const PALETA = [['bateria', 'Batería'], ['percusion', 'Congas'], ['timbal', 'Timbales'], ['teclado', 'Teclado'], ['amp_guitarra', 'Amp. guitarra'], ['amp_bajo', 'Amp. bajo'], ['mic', 'Mic. voz'], ['mic_inst', 'Mic. instrumento'],
+const PALETA = [['bateria', 'Batería'], ['percusion', 'Congas'], ['timbal', 'Timbales'], ['bongo', 'Bongó'], ['guira', 'Güira'], ['teclado', 'Teclado'],
+  ['guitarra', 'Guitarra'], ['bajo', 'Bajo'], ['trompeta', 'Trompeta'], ['trombon', 'Trombón'], ['saxofon', 'Saxofón'],
+  ['amp_guitarra', 'Amp. guitarra'], ['amp_bajo', 'Amp. bajo'], ['mic', 'Mic. voz'], ['mic_inst', 'Mic. instrumento'],
   ['di', 'DI box'], ['monitor', 'Monitor (cuña)'], ['sidefill', 'Side fill'], ['iem', 'In-ear'], ['musico', 'Músico'], ['tarima', 'Tarima'], ['toma', 'Toma eléctrica'], ['consola', 'Consola'], ['texto', 'Texto']];
 const PAL_N = Object.fromEntries(PALETA);
 const T = '#0F172A', MOR = '#7C02F7', SUA = '#F1F5F9';
+// degradados y texturas compartidos por todos los íconos (bronce, parches, madera, metal dorado, cromo, rejilla)
+const DEFS_PLANO = `<defs>
+  <radialGradient id="bgCym" cx="42%" cy="38%" r="68%"><stop offset="0" stop-color="#FDF0B5"/><stop offset=".45" stop-color="#E2B457"/><stop offset="1" stop-color="#9A6B1F"/></radialGradient>
+  <radialGradient id="bgHead" cx="38%" cy="34%" r="72%"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DDE3EA"/></radialGradient>
+  <radialGradient id="bgSkin" cx="38%" cy="34%" r="72%"><stop offset="0" stop-color="#FCF5E6"/><stop offset="1" stop-color="#E3CB9C"/></radialGradient>
+  <radialGradient id="bgWood" cx="38%" cy="34%" r="72%"><stop offset="0" stop-color="#C98446"/><stop offset="1" stop-color="#6B3410"/></radialGradient>
+  <radialGradient id="bgBurst" cx="45%" cy="50%" r="60%"><stop offset="0" stop-color="#FBBF24"/><stop offset=".6" stop-color="#B45309"/><stop offset="1" stop-color="#1C1917"/></radialGradient>
+  <radialGradient id="bgCone" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#6B7280"/><stop offset=".35" stop-color="#1F2937"/><stop offset="1" stop-color="#030712"/></radialGradient>
+  <linearGradient id="bgGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FEF3C7"/><stop offset=".45" stop-color="#E5A823"/><stop offset="1" stop-color="#92570A"/></linearGradient>
+  <linearGradient id="bgChrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#CBD5E1"/><stop offset="1" stop-color="#8592A6"/></linearGradient>
+  <linearGradient id="bgBlack" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3F4654"/><stop offset="1" stop-color="#0B0F19"/></linearGradient>
+  <linearGradient id="bgBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60A5FA"/><stop offset="1" stop-color="#1E3A8A"/></linearGradient>
+  <linearGradient id="bgShell" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#BE123C"/><stop offset="1" stop-color="#4C0519"/></linearGradient>
+  <pattern id="bgMesh" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#1F2937"/><circle cx="2.5" cy="2.5" r="1.1" fill="#6B7280"/></pattern>
+  <pattern id="bgMeshS" width="3" height="3" patternUnits="userSpaceOnUse"><rect width="3" height="3" fill="#E5E7EB"/><circle cx="1.5" cy="1.5" r=".75" fill="#6B7280"/></pattern>
+  <pattern id="bgGuira" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="none"/><circle cx="2.5" cy="2.5" r="1" fill="#64748B"/></pattern>
+</defs>`;
 
-// ---------- dibujo de cada elemento (unidades: centímetros; el escenario se mide en metros × 100) ----------
+// ---------- íconos realistas vistos desde arriba (unidades: centímetros; el escenario se mide en metros × 100; el público queda abajo) ----------
 function simbolo(p) {
-  const r = (w, h, extra = '') => `<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="6" fill="#fff" stroke="${T}" stroke-width="3" ${extra}/>`;
   const t = (s, y = 6, sz = 18, col = T) => `<text x="0" y="${y}" text-anchor="middle" font-size="${sz}" font-weight="700" font-family="Plus Jakarta Sans, sans-serif" fill="${col}">${esc(s)}</text>`;
-  const c = (x, y, rr, f = '#fff') => `<circle cx="${x}" cy="${y}" r="${rr}" fill="${f}" stroke="${T}" stroke-width="3"/>`;
+  const anillo = (x, y, rr, n, col = '#CBD5E1', d = 2.2) => Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return `<circle cx="${(x + Math.cos(a) * rr).toFixed(1)}" cy="${(y + Math.sin(a) * rr).toFixed(1)}" r="${d}" fill="${col}" stroke="#475569" stroke-width=".6"/>`; }).join('');
+  // tambor: casco, aro cromado, afinadores y parche
+  const tambor = (x, y, r, casco = 'url(#bgShell)', parche = 'url(#bgHead)') => `<circle cx="${x}" cy="${y}" r="${r + 4}" fill="${casco}" stroke="#1E293B" stroke-width="1.5"/>${anillo(x, y, r + 4, Math.max(6, Math.round(r / 2.6)))}<circle cx="${x}" cy="${y}" r="${r + 1}" fill="none" stroke="url(#bgChrome)" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${r}" fill="${parche}" stroke="#94A3B8" stroke-width="1"/><circle cx="${x}" cy="${y}" r="${(r * 0.32).toFixed(1)}" fill="none" stroke="#CBD5E1" stroke-width="1"/>`;
+  // platillo: bronce con surcos, campana y agujero
+  const platillo = (x, y, r) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#bgCym)" stroke="#8A5A12" stroke-width="1.3"/><circle cx="${x}" cy="${y}" r="${(r * 0.78).toFixed(1)}" fill="none" stroke="#A9772A" stroke-opacity=".45" stroke-width="1"/><circle cx="${x}" cy="${y}" r="${(r * 0.56).toFixed(1)}" fill="none" stroke="#A9772A" stroke-opacity=".45" stroke-width="1"/><circle cx="${x}" cy="${y}" r="${(r * 0.24).toFixed(1)}" fill="url(#bgCym)" stroke="#8A5A12" stroke-width="1.2"/><circle cx="${x}" cy="${y}" r="1.8" fill="#1F2937"/>`;
+  const caja = (w, h, f = 'url(#bgBlack)', rx = 5) => `<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${rx}" fill="${f}" stroke="#030712" stroke-width="1.5"/>`;
+  const perillas = (x0, y, n, paso, col = '#E5E7EB', r = 2.4) => Array.from({ length: n }, (_, i) => `<circle cx="${x0 + i * paso}" cy="${y}" r="${r}" fill="${col}" stroke="#111827" stroke-width=".8"/>`).join('');
   switch (p.tipo) {
-    case 'bateria': return c(0, 6, 34, SUA) + c(-46, -16, 18) + c(-18, -40, 16) + c(18, -40, 16) + c(46, -10, 20) + c(-60, 22, 22, '#FEF3C7') + c(60, 26, 24, '#FEF3C7') + t('BAT', 12, 16);
-    case 'percusion': return c(-24, 0, 22, SUA) + c(24, 0, 22, SUA) + c(0, -30, 18, SUA) + t('CNG', 7, 14);
-    case 'timbal': return c(-22, 0, 20, SUA) + c(22, 0, 22, SUA) + c(0, -32, 14, '#FEF3C7') + t('TIM', 7, 14);
-    case 'teclado': return r(140, 40) + Array.from({ length: 13 }, (_, i) => `<line x1="${-60 + i * 10}" y1="-16" x2="${-60 + i * 10}" y2="16" stroke="${T}" stroke-width="1.5"/>`).join('');
-    case 'amp_guitarra': return r(70, 44, `fill="${SUA}"`) + t('GTR', 7, 16);
-    case 'amp_bajo': return r(72, 60, `fill="${SUA}"`) + t('BAJO', 7, 16);
-    case 'monitor': return `<path d="M-36 14 L-28 -14 L28 -14 L36 14 Z" fill="#fff" stroke="${T}" stroke-width="3"/>` + t('M', 8, 16);
-    case 'sidefill': return r(60, 60) + t('SF', 7, 18);
-    case 'mic': return `<line x1="0" y1="0" x2="0" y2="40" stroke="${MOR}" stroke-width="4"/>` + `<circle cx="0" cy="0" r="11" fill="${MOR}"/>`;
-    case 'mic_inst': return `<line x1="0" y1="0" x2="22" y2="22" stroke="${MOR}" stroke-width="3"/>` + `<circle cx="0" cy="0" r="8" fill="${MOR}"/>`;
-    case 'di': return r(34, 20, `fill="#EDE9FE"`) + t('DI', 6, 13, MOR);
-    case 'iem': return r(34, 22, `fill="#EDE9FE"`) + t('IEM', 6, 11, MOR);
-    case 'toma': return r(28, 28, `fill="#FEF3C7"`) + `<path d="M2 -9 L-6 2 L0 2 L-2 10 L6 -1 L0 -1 Z" fill="${T}"/>`;
-    case 'consola': return r(120, 56, `fill="${SUA}"`) + t('FOH', 7, 18);
-    case 'musico': return c(0, 0, 26, '#F3E8FF') + t(iniciales(p.etiqueta) || '?', 7, 17, '#6A02D4');
-    case 'texto': return '';
-    default: return c(0, 0, 10);
+    case 'bateria': return `<circle cx="0" cy="-60" r="14" fill="#111827" stroke="#030712" stroke-width="1.5"/><circle cx="0" cy="-60" r="10" fill="none" stroke="#374151" stroke-width="1" stroke-dasharray="2 2"/>`
+      + `<rect x="-28" y="-14" width="56" height="42" rx="4" fill="url(#bgShell)" stroke="#1E293B" stroke-width="1.5"/><rect x="-30" y="-16" width="60" height="5" rx="2" fill="url(#bgChrome)"/><rect x="-30" y="25" width="60" height="5" rx="2" fill="url(#bgChrome)"/><rect x="-5" y="-26" width="10" height="11" rx="2" fill="#374151"/>`
+      + tambor(42, -36, 18) + tambor(-30, -32, 15, 'url(#bgChrome)') + tambor(-15, -8, 12) + tambor(17, -8, 13)
+      + platillo(-63, -34, 17) + platillo(-52, 16, 22) + platillo(62, 4, 25);
+    case 'percusion': return tambor(-30, 8, 16, 'url(#bgWood)', 'url(#bgSkin)') + tambor(0, -16, 18, 'url(#bgWood)', 'url(#bgSkin)') + tambor(31, 8, 20, 'url(#bgWood)', 'url(#bgSkin)');
+    case 'timbal': return platillo(-46, -30, 16) + tambor(-21, 4, 17, 'url(#bgChrome)') + tambor(22, 4, 19, 'url(#bgChrome)')
+      + `<path d="M-9 -38 L9 -38 L6 -20 L-6 -20 Z" fill="url(#bgBlack)" stroke="#030712" stroke-width="1"/><rect x="-2" y="-44" width="4" height="7" fill="#64748B"/><path d="M18 -38 L32 -38 L30 -26 L20 -26 Z" fill="url(#bgBlack)" stroke="#030712" stroke-width="1"/>`;
+    case 'bongo': return `<rect x="-6" y="-4" width="14" height="8" fill="#5B2A0C"/>` + tambor(-15, 0, 11, 'url(#bgWood)', 'url(#bgSkin)') + tambor(17, 0, 13, 'url(#bgWood)', 'url(#bgSkin)');
+    case 'guira': return `<rect x="-30" y="-9" width="50" height="18" rx="9" fill="url(#bgChrome)" stroke="#64748B" stroke-width="1.3"/><rect x="-26" y="-6" width="42" height="12" rx="6" fill="url(#bgGuira)"/><rect x="20" y="-4.5" width="14" height="9" rx="3" fill="#1F2937"/>`
+      + `<rect x="-24" y="14" width="26" height="4" rx="2" fill="#1F2937"/>${Array.from({ length: 8 }, (_, i) => `<line x1="${-22 + i * 3}" y1="18" x2="${-22 + i * 3}" y2="24" stroke="#94A3B8" stroke-width="1"/>`).join('')}`;
+    case 'teclado': {
+      const n = 29, w = 128 / n;
+      const blancas = Array.from({ length: n - 1 }, (_, i) => `<line x1="${(-64 + (i + 1) * w).toFixed(1)}" y1="-14" x2="${(-64 + (i + 1) * w).toFixed(1)}" y2="6" stroke="#94A3B8" stroke-width=".8"/>`).join('');
+      const negras = Array.from({ length: n - 1 }, (_, i) => [0, 1, 3, 4, 5].includes(i % 7) ? `<rect x="${(-64 + (i + 1) * w - w * 0.32).toFixed(1)}" y="-14" width="${(w * 0.64).toFixed(1)}" height="12" rx=".8" fill="#0B0F19"/>` : '').join('');
+      return caja(144, 42) + `<rect x="-64" y="-14" width="128" height="20" fill="#fff"/>${blancas}${negras}<rect x="-66" y="9" width="10" height="9" rx="2" fill="#4B5563"/><rect x="-20" y="9" width="30" height="8" rx="1.5" fill="#0E7490" stroke="#67E8F9" stroke-width=".6"/>` + perillas(18, 13, 7, 7, '#D1D5DB', 2) + perillas(-50, 13, 4, 7, '#F59E0B', 1.8);
+    }
+    case 'guitarra': return `<path d="M-54 0 C-54 -22 -40 -27 -30 -21 C-24 -17 -18 -17 -12 -21 C-2 -27 8 -19 8 0 C8 19 -2 27 -12 21 C-18 17 -24 17 -30 21 C-40 27 -54 22 -54 0 Z" fill="url(#bgBurst)" stroke="#1C1917" stroke-width="1.5"/>`
+      + `<path d="M-46 -10 L-30 -10 L-30 10 L-46 10 Z" fill="#FAFAF9" fill-opacity=".9"/><rect x="-26" y="-7" width="6" height="14" rx="1.5" fill="#111827"/><rect x="-14" y="-7" width="6" height="14" rx="1.5" fill="#111827"/><rect x="-42" y="-5" width="5" height="10" fill="#9CA3AF"/>`
+      + `<rect x="6" y="-3.5" width="46" height="7" rx="1" fill="#7C4A1E"/><path d="M52 -6 L66 -7 L66 7 L52 6 Z" fill="#3B2412"/>${[-2, 0, 2].map((y) => `<line x1="-42" y1="${y}" x2="62" y2="${y}" stroke="#E5E7EB" stroke-width=".5"/>`).join('')}` + perillas(-6, 14, 3, 5, '#E5E7EB', 1.6);
+    case 'bajo': return `<path d="M-60 0 C-60 -24 -44 -29 -33 -22 C-27 -18 -20 -18 -14 -23 C-4 -29 6 -20 6 0 C6 20 -4 29 -14 23 C-20 18 -27 18 -33 22 C-44 29 -60 24 -60 0 Z" fill="url(#bgBlue)" stroke="#0B1A3D" stroke-width="1.5"/>`
+      + `<rect x="-44" y="-8" width="8" height="16" rx="1.5" fill="#111827"/><rect x="-28" y="-8" width="8" height="16" rx="1.5" fill="#111827"/><rect x="-52" y="-6" width="5" height="12" fill="#9CA3AF"/>`
+      + `<rect x="4" y="-4" width="64" height="8" rx="1" fill="#7C4A1E"/><path d="M68 -7 L84 -8 L84 8 L68 7 Z" fill="#1E293B"/>${[-2.4, -0.8, 0.8, 2.4].map((y) => `<line x1="-50" y1="${y}" x2="80" y2="${y}" stroke="#E5E7EB" stroke-width=".6"/>`).join('')}` + perillas(-10, 15, 3, 5, '#E5E7EB', 1.8);
+    case 'trompeta': return `<rect x="-40" y="-2.2" width="9" height="4.4" rx="1.5" fill="url(#bgChrome)"/><line x1="-32" y1="0" x2="14" y2="0" stroke="#D49A1F" stroke-width="4.5"/><rect x="-20" y="-13" width="34" height="26" rx="11" fill="none" stroke="#D49A1F" stroke-width="4"/>`
+      + [-6, 2, 10].map((x) => `<circle cx="${x}" cy="-2" r="5" fill="url(#bgGold)" stroke="#92570A" stroke-width="1"/><circle cx="${x}" cy="-2" r="2.2" fill="#FEF3C7"/>`).join('')
+      + `<path d="M14 -5 L34 -16 Q40 0 34 16 L14 5 Z" fill="url(#bgGold)" stroke="#92570A" stroke-width="1.2"/><ellipse cx="35" cy="0" rx="3" ry="16" fill="#B7791F" stroke="#92570A" stroke-width="1"/>`;
+    case 'trombon': return `<rect x="-64" y="-5" width="74" height="10" rx="5" fill="none" stroke="#D49A1F" stroke-width="3.5"/><line x1="-30" y1="-5" x2="-30" y2="5" stroke="#92570A" stroke-width="2.5"/>`
+      + `<path d="M10 -5 Q20 -5 20 -14 Q20 -22 6 -22 L-6 -22" fill="none" stroke="#D49A1F" stroke-width="4"/><path d="M-6 -27 L-36 -35 Q-42 -22 -36 -9 L-6 -17 Z" fill="url(#bgGold)" stroke="#92570A" stroke-width="1.2"/><ellipse cx="-37" cy="-22" rx="3" ry="13" fill="#B7791F" stroke="#92570A" stroke-width="1"/><rect x="10" y="3" width="9" height="4" rx="1.5" fill="url(#bgChrome)"/>`;
+    case 'saxofon': return `<path d="M-36 -10 L14 -13 Q32 -13 32 3 Q32 15 20 16" fill="none" stroke="#B7791F" stroke-width="12" stroke-linecap="round"/><path d="M-36 -10 L14 -13 Q32 -13 32 3 Q32 15 20 16" fill="none" stroke="#F6C453" stroke-width="5" stroke-linecap="round"/>`
+      + `<ellipse cx="16" cy="17" rx="10" ry="8" fill="#78350F" stroke="#D49A1F" stroke-width="3"/><line x1="-36" y1="-10" x2="-46" y2="-17" stroke="#D49A1F" stroke-width="4" stroke-linecap="round"/><rect x="-53" y="-21" width="8" height="5" rx="2" fill="#111827" transform="rotate(30 -49 -18)"/>`
+      + [-24, -14, -4, 6].map((x) => `<circle cx="${x}" cy="-11.5" r="2.6" fill="#FEF3C7" stroke="#92570A" stroke-width=".8"/>`).join('');
+    case 'amp_guitarra': return caja(70, 44) + `<rect x="-35" y="-22" width="70" height="44" rx="5" fill="none" stroke="#D4A017" stroke-width="1.2"/><rect x="-31" y="10" width="62" height="9" rx="1.5" fill="url(#bgMesh)"/><rect x="-31" y="-18" width="62" height="8" rx="1.5" fill="url(#bgChrome)"/>` + perillas(-25, -14, 7, 8, '#111827', 2.2)
+      + `<rect x="-14" y="-3" width="28" height="6" rx="3" fill="#111827" stroke="#4B5563" stroke-width="1.2"/>`;
+    case 'amp_bajo': return caja(72, 60) + `<rect x="-33" y="-29" width="66" height="22" rx="3" fill="#1F2937" stroke="#4B5563" stroke-width="1"/><rect x="-30" y="-26" width="60" height="6" rx="1" fill="url(#bgChrome)"/>` + perillas(-25, -23, 8, 7, '#111827', 1.8)
+      + `<rect x="-12" y="-15" width="24" height="5" rx="2.5" fill="#030712"/><rect x="-33" y="-4" width="10" height="5" rx="2" fill="#4B5563"/><rect x="23" y="-4" width="10" height="5" rx="2" fill="#4B5563"/><rect x="-33" y="20" width="66" height="8" rx="1.5" fill="url(#bgMesh)"/>`;
+    case 'monitor': return `<path d="M-40 16 L-32 -16 L32 -16 L40 16 Z" fill="url(#bgBlack)" stroke="#030712" stroke-width="1.5"/><path d="M-29 -12 L29 -12 L33 4 L-33 4 Z" fill="url(#bgMesh)" stroke="#4B5563" stroke-width="1"/><rect x="-8" y="8" width="16" height="4" rx="1" fill="#9CA3AF"/>`;
+    case 'sidefill': return caja(60, 60) + `<rect x="-26" y="-26" width="52" height="52" rx="3" fill="url(#bgMesh)"/><circle cx="0" cy="6" r="18" fill="url(#bgCone)" stroke="#4B5563" stroke-width="2"/><circle cx="0" cy="6" r="5" fill="#374151"/><rect x="-14" y="-24" width="28" height="9" rx="2" fill="#111827" stroke="#4B5563" stroke-width="1"/>`;
+    case 'mic': return `${['-16 38', '16 38', '0 47'].map((q) => `<line x1="0" y1="30" x2="${q.split(' ')[0]}" y2="${q.split(' ')[1]}" stroke="#374151" stroke-width="3" stroke-linecap="round"/>`).join('')}<circle cx="0" cy="30" r="3.5" fill="#111827"/>`
+      + `<rect x="-3.5" y="5" width="7" height="22" rx="3" fill="url(#bgBlack)"/><circle cx="0" cy="0" r="9" fill="url(#bgMeshS)" stroke="#6B7280" stroke-width="1.5"/><path d="M-9 0 A9 9 0 0 1 9 0" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="1"/>`;
+    case 'mic_inst': return `<line x1="10" y1="10" x2="30" y2="30" stroke="#374151" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="30" r="5" fill="#111827"/>`
+      + `<g transform="rotate(-45)"><rect x="-3.2" y="3" width="6.4" height="16" rx="2" fill="url(#bgBlack)"/><rect x="-4.5" y="-7" width="9" height="11" rx="2.5" fill="url(#bgMeshS)" stroke="#6B7280" stroke-width="1"/></g>`;
+    case 'di': return caja(34, 20, 'url(#bgBlue)', 3) + `<circle cx="-11" cy="0" r="4" fill="#111827" stroke="#CBD5E1" stroke-width="1.2"/><circle cx="11" cy="0" r="4" fill="#111827" stroke="#CBD5E1" stroke-width="1.2"/>` + t('DI', 3, 7, '#fff');
+    case 'iem': return `<path d="M-6 -15 Q-6 -26 -16 -26 M6 -15 Q6 -26 16 -26" fill="none" stroke="#111827" stroke-width="1.5"/><circle cx="-16" cy="-26" r="3" fill="#111827"/><circle cx="16" cy="-26" r="3" fill="#111827"/>`
+      + caja(22, 30, 'url(#bgBlack)', 4) + `<rect x="-7" y="-10" width="14" height="8" rx="1" fill="#0E7490" stroke="#67E8F9" stroke-width=".6"/><line x1="7" y1="-15" x2="7" y2="-22" stroke="#4B5563" stroke-width="2"/>` + perillas(-4, 6, 2, 8, '#9CA3AF', 2);
+    case 'toma': return `<rect x="-22" y="-8" width="44" height="16" rx="3" fill="#F8FAFC" stroke="#64748B" stroke-width="1.3"/><rect x="-19" y="-4" width="6" height="8" rx="1" fill="#DC2626"/>`
+      + [-6, 4, 14].map((x) => `<circle cx="${x}" cy="0" r="4" fill="#E2E8F0" stroke="#94A3B8" stroke-width=".8"/><rect x="${x - 2}" y="-1.8" width="1" height="3.6" fill="#111827"/><rect x="${x + 1}" y="-1.8" width="1" height="3.6" fill="#111827"/>`).join('')
+      + `<path d="M22 0 Q30 0 30 8" fill="none" stroke="#111827" stroke-width="2"/>`;
+    case 'consola': return caja(124, 58, 'url(#bgBlack)', 6) + `<rect x="-20" y="-25" width="40" height="13" rx="1.5" fill="#0C4A6E" stroke="#38BDF8" stroke-width=".8"/>${[0, 1, 2].map((i) => `<rect x="${-16 + i * 11}" y="-22" width="9" height="7" fill="#22D3EE" fill-opacity="${0.35 + i * 0.2}"/>`).join('')}`
+      + Array.from({ length: 16 }, (_, i) => { const x = -56 + i * 7.4; const yf = 8 + ((i * 7) % 11); return `<circle cx="${x}" cy="-4" r="1.6" fill="#9CA3AF"/><line x1="${x}" y1="2" x2="${x}" y2="24" stroke="#030712" stroke-width="1.8"/><rect x="${x - 2.6}" y="${yf}" width="5.2" height="3.4" rx=".6" fill="#F8FAFC"/>`; }).join('')
+      + perillas(28, -22, 4, 7, '#F59E0B', 1.8) + perillas(-54, -22, 4, 7, '#9CA3AF', 1.8);
+    case 'musico': return `<ellipse cx="0" cy="8" rx="28" ry="14" fill="${MOR}" stroke="#4C0199" stroke-width="1.5"/><circle cx="0" cy="-2" r="15" fill="#F3E8FF" stroke="#6A02D4" stroke-width="2"/>` + t(iniciales(p.etiqueta) || '?', 3, 12, '#6A02D4');
+    case 'tarima': return `<rect x="-36" y="-26" width="72" height="52" fill="#F8FAFC" stroke="#94A3B8" stroke-width="3" stroke-dasharray="10 6"/>`;
+    case 'texto': return `<text x="0" y="10" text-anchor="middle" font-size="30" font-weight="700" fill="${T}" font-family="Outfit, sans-serif">Aa</text>`;
+    default: return `<circle r="10" fill="#fff" stroke="${T}" stroke-width="3"/>`;
   }
 }
-const ALTO = { bateria: 70, percusion: 40, timbal: 40, teclado: 26, amp_guitarra: 28, amp_bajo: 36, monitor: 20, sidefill: 36, mic: 46, mic_inst: 28, di: 16, iem: 16, toma: 20, consola: 34, musico: 32, texto: 0 };
+const ALTO = { bateria: 72, percusion: 40, timbal: 36, bongo: 18, guira: 26, teclado: 26, guitarra: 28, bajo: 30, trompeta: 18, trombon: 22, saxofon: 26, amp_guitarra: 28, amp_bajo: 36, monitor: 20, sidefill: 36, mic: 48, mic_inst: 34, di: 14, iem: 18, toma: 12, consola: 34, musico: 26, texto: 0 };
+// ventana de cada ícono en los botones de «Agregar»: [centro x, centro y, mitad del lado]
+const VISTA = { bateria: [0, -6, 88], percusion: [0, -2, 44], timbal: [-8, -10, 48], bongo: [1, 0, 32], guira: [0, 6, 36], teclado: [0, 0, 74], guitarra: [6, 0, 62], bajo: [12, 0, 74], trompeta: [-2, 0, 42], trombon: [-14, -10, 54], saxofon: [-8, 0, 48], amp_guitarra: [0, 0, 38], amp_bajo: [0, 0, 38], monitor: [0, 0, 42], sidefill: [0, 0, 34], mic: [0, 22, 28], mic_inst: [12, 12, 24], di: [0, 0, 19], iem: [0, -6, 24], toma: [4, 2, 28], consola: [0, 0, 64], musico: [0, 4, 30], tarima: [0, 0, 40], texto: [0, 0, 24] };
+function iconoPaleta(k) { const [x, y, e] = VISTA[k] || [0, 0, 40]; return `<svg viewBox="${x - e} ${y - e} ${e * 2} ${e * 2}" width="30" height="30" aria-hidden="true" style="flex:none">${simbolo({ tipo: k, etiqueta: '' })}</svg>`; }
 function svgPlano(datos, { editable = false, sel = null } = {}) {
   const W = datos.escenario.ancho * 100, H = datos.escenario.fondo * 100;
   const grid = [];
@@ -56,7 +119,7 @@ function svgPlano(datos, { editable = false, sel = null } = {}) {
       <g transform="rotate(${p.rot})">${simbolo(p)}</g>${lbl}${editable ? `<circle r="${Math.max(30, ALTO[p.tipo] || 20)}" fill="transparent"/>` : ''}</g>`;
   }).join('');
   return `<svg viewBox="-60 -70 ${W + 120} ${H + 170}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;touch-action:${editable ? 'none' : 'auto'};user-select:none" ${editable ? 'tabindex="0" aria-label="Plano del escenario: arrastre los elementos; flechas para mover, R para girar, Supr para quitar"' : 'role="img" aria-label="Plano del escenario"'}>
-    <text x="${W / 2}" y="-28" text-anchor="middle" font-size="20" font-weight="700" fill="#64748B" letter-spacing="3" font-family="Plus Jakarta Sans, sans-serif">FONDO DEL ESCENARIO</text>
+    ${DEFS_PLANO}<text x="${W / 2}" y="-28" text-anchor="middle" font-size="20" font-weight="700" fill="#64748B" letter-spacing="3" font-family="Plus Jakarta Sans, sans-serif">FONDO DEL ESCENARIO</text>
     <rect data-fondo="1" x="0" y="0" width="${W}" height="${H}" fill="#fff" stroke="${T}" stroke-width="5"/>${grid.join('')}
     <text x="${W - 8}" y="-8" text-anchor="end" font-size="15" fill="#94A3B8" font-family="JetBrains Mono, monospace">${datos.escenario.ancho} × ${datos.escenario.fondo} m · cuadros de 1 m</text>
     ${el}<rect x="${W * 0.15}" y="${H + 30}" width="${W * 0.7}" height="46" rx="10" fill="#0F172A"/><text x="${W / 2}" y="${H + 61}" text-anchor="middle" font-size="22" font-weight="700" fill="#fff" letter-spacing="6" font-family="Outfit, sans-serif">PÚBLICO</text></svg>`;
@@ -140,7 +203,7 @@ async function editorRider(c, id, pest) {
   // --- plano ---
   function pintarPlano() {
     pc.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
-      ${ed ? `<aside class="card no-print" style="flex:1 1 220px;max-width:280px;display:flex;flex-direction:column;gap:10px"><h2>Agregar</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${PALETA.map(([k, t]) => `<button class="btn chico" data-add="${k}" style="justify-content:flex-start">${esc(t)}</button>`).join('')}</div>
+      ${ed ? `<aside class="card no-print" style="flex:1 1 220px;max-width:280px;display:flex;flex-direction:column;gap:10px"><h2>Agregar</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${PALETA.map(([k, t]) => `<button class="btn chico" data-add="${k}" style="justify-content:flex-start;gap:6px;padding:4px 8px" title="Agregar ${esc(t)}">${iconoPaleta(k)}<span>${esc(t)}</span></button>`).join('')}</div>
         <div class="fila"><label class="campo">Ancho (m)<input id="ea" inputmode="decimal" value="${D.escenario.ancho}"></label><label class="campo">Fondo (m)<input id="ef" inputmode="decimal" value="${D.escenario.fondo}"></label></div>
         <button class="btn chico" id="und">Deshacer (Ctrl+Z)</button><p class="mut peq" style="margin:0">Arrastre con el dedo o el ratón. Teclado: flechas mueven (Mayús = 50 cm), R gira, Supr quita, Ctrl+D duplica.</p></aside>` : ''}
       <div class="card" style="flex:999 1 520px;min-width:0;padding:12px" id="lienzo">${svgPlano(D, { editable: ed, sel })}</div>

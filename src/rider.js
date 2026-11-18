@@ -4,7 +4,7 @@
 import { json, err, txt, emailOk, sha256, auditar } from './nucleo.js';
 
 export const ALCANCES = { general: 'General', rd: 'República Dominicana', us: 'Estados Unidos', eu: 'Europa', evento: 'Personalizado para un evento' };
-export const TIPOS_PLOT = ['bateria', 'percusion', 'timbal', 'teclado', 'amp_guitarra', 'amp_bajo', 'monitor', 'sidefill', 'mic', 'mic_inst', 'di', 'toma', 'tarima', 'musico', 'iem', 'consola', 'texto'];
+export const TIPOS_PLOT = ['bateria', 'percusion', 'timbal', 'teclado', 'amp_guitarra', 'amp_bajo', 'monitor', 'sidefill', 'mic', 'mic_inst', 'di', 'toma', 'tarima', 'musico', 'iem', 'consola', 'texto', 'bongo', 'guira', 'guitarra', 'bajo', 'trompeta', 'trombon', 'saxofon'];
 const SOPORTES = ['', 'alto', 'bajo', 'clip', 'mesa'];
 const TIPOS_MEZCLA = ['cuna', 'iem_estereo', 'iem_mono', 'sidefill'];
 const SECCIONES = ['consola', 'monitores', 'microfonia', 'di_backline', 'energia', 'escenario', 'instrucciones'];

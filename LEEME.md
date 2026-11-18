@@ -39,7 +39,8 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
 - **Fase 5 · rider técnico:** riders por país (RD, EE. UU., Europa), generales y personalizados por evento (RID-00001);
   editor del plano del escenario en SVG (arrastrar con el dedo o el ratón, girar, duplicar, deshacer, medidas del escenario,
-  batería, congas, timbales, teclado, amplificadores, micrófonos, DI, monitores, side fills, in-ear, tarimas, tomas, músicos);
+  con íconos realistas vistos desde arriba: batería, congas, timbales, bongó, güira, teclado, guitarra, bajo, trompeta,
+  trombón, saxofón, amplificadores, micrófonos, DI, monitores, side fills, in-ear, tarimas, tomas, consola y músicos);
   lista de canales (con «batería completa» y «crear canales desde el plano»), mezclas de monitor, requerimientos (consola,
   monitores, microfonía, DI y backline, energía, escenario, instrucciones) y contactos técnicos; se guarda solo mientras edita;
   versiones congeladas con nota, fecha, autor y huella; hoja para imprimir / PDF (cada descarga queda en la bitácora);
