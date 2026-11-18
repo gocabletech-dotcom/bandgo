@@ -200,3 +200,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .chat-resp{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 12px;background:var(--morado-cc);font-size:13px}
 .chat-conv.solo{height:calc(100vh - 230px);min-height:420px}
 @media (max-width:860px){.chat{grid-template-columns:1fr;height:calc(100vh - 130px)}.chat.con-conv .chat-lista{display:none}.chat:not(.con-conv) .chat-conv{display:none}.msg{max-width:90%}}
+
+/* etiqueta de rol que se despliega */
+.rol-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--borde2);background:#fff;border-radius:99px;padding:3px 10px;font:inherit;font-size:13px;font-weight:600;color:var(--tinta);cursor:pointer}
+.rol-chip:hover,.rol-chip[aria-expanded=true]{border-color:#9B1FF5;color:#6A02D4;background:var(--morado-cc)}
+.rol-pop{position:absolute;z-index:30;left:0;top:calc(100% + 6px);width:min(440px,86vw);display:flex;flex-direction:column;gap:6px;box-shadow:0 18px 40px rgba(15,23,42,.18)}
+.rol-det-box{border:1px solid var(--borde);border-radius:10px;padding:8px 12px;background:var(--fondo)}.rol-det-box summary{cursor:pointer}

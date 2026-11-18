@@ -210,9 +210,12 @@ export async function rutasPublicas({ req, env, url, ectx, db, mod, idRaw, metho
       uid = (await crearUsuario(db, { nombre: txt(d.nombre, 80) || inv.nombre || inv.email, email: inv.email, password: d.password, telefono: d.telefono })).id;
     }
     await db.batch([
-      db.prepare('INSERT INTO miembros (usuario_id, empresa_id, rol) VALUES (?,?,?) ON CONFLICT(usuario_id, empresa_id) DO UPDATE SET rol = excluded.rol, activo = 1').bind(uid, inv.empresa_id, inv.rol),
+      // si ya trabaja en la oficina de esta empresa, una invitación de músico o cliente no le baja el acceso
+      db.prepare(`INSERT INTO miembros (usuario_id, empresa_id, rol) VALUES (?,?,?) ON CONFLICT(usuario_id, empresa_id) DO UPDATE SET activo = 1,
+        rol = CASE WHEN miembros.rol IN ('dueno','admin','manager','booking') AND excluded.rol IN ('musico','sonidista','cliente') THEN miembros.rol ELSE excluded.rol END`).bind(uid, inv.empresa_id, inv.rol),
       db.prepare('UPDATE invitaciones SET usado = 1 WHERE token = ?').bind(h),
       ...(inv.musico_id ? [db.prepare('UPDATE musicos SET usuario_id = ? WHERE id = ? AND empresa_id = ?').bind(uid, inv.musico_id, inv.empresa_id)] : []),
+      ...(inv.cliente_id ? [db.prepare('UPDATE clientes SET usuario_id = ? WHERE id = ? AND empresa_id = ?').bind(uid, inv.cliente_id, inv.empresa_id)] : []),
     ]);
     await auditar({ db, empresa: { id: inv.empresa_id }, user: { id: uid }, req }, 'invitacion_aceptada', 'usuario', uid, `${inv.email} · ${inv.rol}`);
     return iniciarSesion(db, url, uid, inv.empresa_id);

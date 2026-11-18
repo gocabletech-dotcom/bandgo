@@ -154,11 +154,24 @@ export async function rutasPersonal(L) {
       if (method === 'GET') { const e = no('pagos.ver'); if (e) return e; return json(await cuentaDe(db, E, id, false)); }
       if (method === 'PUT') { const e = no('pagos.editar'); if (e) return e; return guardarCuenta(db, ctx, id, d); }
     }
+    if (id && accion === 'enlazar' && method === 'POST') { const e = no('usuarios.editar'); if (e) return e;
+      const m = await db.prepare('SELECT * FROM musicos WHERE id = ? AND empresa_id = ?').bind(id, E).first(); if (!m) return err('No encontrado', 404);
+      const uid = Number(d.usuario_id) || null;
+      if (uid) { const ok = await db.prepare("SELECT 1 FROM miembros WHERE usuario_id = ? AND empresa_id = ? AND activo = 1 AND rol IN ('dueno','admin','manager','booking')").bind(uid, E).first(); if (!ok) return err('Escoja un usuario de la oficina');
+        if (await db.prepare('SELECT 1 FROM musicos WHERE usuario_id = ? AND empresa_id = ? AND id != ?').bind(uid, E, id).first()) return err('Ese usuario ya está enlazado a otro integrante'); }
+      await db.prepare('UPDATE musicos SET usuario_id = ? WHERE id = ?').bind(uid, id).run();
+      await auditar(ctx, uid ? 'musico_enlazado' : 'musico_desenlazado', 'musico', id, uid ? 'usuario ' + uid : '');
+      return json({ ok: true }); }
     // dar acceso al portal: manda (o devuelve) un enlace de invitación de 7 días
     if (id && accion === 'invitar' && method === 'POST') { const e = no('usuarios.invitar'); if (e) return e;
       const m = await db.prepare('SELECT * FROM musicos WHERE id = ? AND empresa_id = ?').bind(id, E).first(); if (!m) return err('No encontrado', 404);
       if (m.usuario_id) return err('Ya tiene acceso al portal');
       if (!emailOk(m.email)) return err('Agregue primero el correo del integrante');
+      // si ese correo ya es de alguien de la oficina (manager, admin…), se enlaza sin bajarle el acceso
+      const of = await db.prepare("SELECT u.id, mi.rol FROM usuarios u JOIN miembros mi ON mi.usuario_id = u.id AND mi.empresa_id = ? AND mi.activo = 1 WHERE u.email = ? AND mi.rol IN ('dueno','admin','manager','booking')").bind(E, String(m.email).toLowerCase()).first();
+      if (of) { if (await db.prepare('SELECT 1 FROM musicos WHERE usuario_id = ? AND empresa_id = ? AND id != ?').bind(of.id, E, id).first()) return err('Ese usuario ya está enlazado a otro integrante');
+        await db.prepare('UPDATE musicos SET usuario_id = ? WHERE id = ?').bind(of.id, id).run(); await auditar(ctx, 'musico_enlazado', 'musico', id, 'usuario ' + of.id);
+        return json({ ok: true, enlazado: true, rol: of.rol }); }
       return invitar(L, { email: m.email, nombre: m.nombre, rol: m.tipo === 'sonidista' ? 'sonidista' : 'musico', musico_id: m.id });
     }
   }
@@ -198,12 +211,12 @@ export async function rutasPersonal(L) {
 }
 
 // invitación con enlace de 7 días; si los correos están activos se manda, si no se devuelve el enlace para pasarlo por WhatsApp
-export async function invitar(L, { email, nombre, rol, musico_id }) {
+export async function invitar(L, { email, nombre, rol, musico_id, cliente_id }) {
   const { db, env, url, empresa, user, ctx } = L;
   const t = rnd(24);
   await db.prepare('DELETE FROM invitaciones WHERE empresa_id = ? AND email = ? AND usado = 0').bind(empresa.id, email).run();
-  await db.prepare('INSERT INTO invitaciones (token, empresa_id, email, nombre, rol, musico_id, expira, creado_por) VALUES (?,?,?,?,?,?,?,?)')
-    .bind(await sha256(t), empresa.id, email, nombre || null, rol, musico_id || null, new Date(Date.now() + 7 * 864e5).toISOString(), user.id).run();
+  await db.prepare('INSERT INTO invitaciones (token, empresa_id, email, nombre, rol, musico_id, cliente_id, expira, creado_por) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(await sha256(t), empresa.id, email, nombre || null, rol, musico_id || null, cliente_id || null, new Date(Date.now() + 7 * 864e5).toISOString(), user.id).run();
   const enlace = `${url.origin}/app/#/invitacion/${t}`;
   let enviado = false;
   if ((await cfgCorreo(env, db)).listo) {

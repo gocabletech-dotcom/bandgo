@@ -397,6 +397,99 @@ async function main() {
   t(r.s === 201 && (await K('chat/canales')).j.some((c) => c.id === r.j.id) && !(await P('chat/canales')).j.some((c) => c.id === r.j.id), 'los grupos los ven solo sus miembros');
   t((await Bc(`chat/canales/${cb.id}/mensajes`)).s === 404 && !(await Bc('chat/canales')).j.some((c) => c.id === cb.id), 'la empresa B no ve las conversaciones de A');
 
+  titulo('Mejoras: varias funciones, nómina con extras, direcciones, estudios, portal del cliente');
+  // un manager que también toca: se enlaza su usuario de oficina al integrante (sin bajarle el acceso)
+  r = await A('usuarios', { method: 'POST', body: { email: 'mario.manager@bandgo.local', nombre: 'Mario Manager', rol: 'manager' } });
+  const MG = cliente(); await MG('invitacion/' + r.j.enlace.split('/').pop(), { method: 'POST', body: { nombre: 'Mario Manager', password: CLAVE } });
+  t((await MG('me')).j.rol === 'manager', 'entra el manager');
+  r = await A('musicos', { method: 'POST', body: { nombre: 'Mario Manager', instrumento: 'Trompeta', email: 'mario.manager@bandgo.local', tarifa: '3000', bandas: [bandaId] } }); const mgMus = r.j.id;
+  r = await A(`musicos/${mgMus}/invitar`, { method: 'POST' }); t(r.s === 200 && r.j.enlazado === true, 'si el correo es de la oficina, el integrante se enlaza sin invitación');
+  r = await MG('me'); t(r.j.rol === 'manager' && r.j.mi_musico && r.j.mi_musico.id === mgMus, 'sigue siendo manager y además tiene su perfil de músico', r.j);
+  const uMG = r.j.usuario.id;
+  // funciones con pago: manager por porcentaje, dirección musical fija, booking fijo de un usuario que no toca
+  t((await K('funciones', { method: 'POST', body: { funcion: 'manager', musico_id: mgMus, modo: 'porcentaje', porcentaje: '10' } })).s === 403, 'el booking no define pagos de funciones');
+  t((await A('funciones', { method: 'POST', body: { funcion: 'manager', musico_id: mgMus, modo: 'porcentaje', porcentaje: '150' } })).s === 400, 'valida el porcentaje');
+  r = await A('funciones', { method: 'POST', body: { funcion: 'manager', musico_id: mgMus, modo: 'porcentaje', porcentaje: '10', base: 'contrato', banda_id: bandaId } }); t(r.s === 201, 'el manager cobra 10 % del contrato');
+  r = await A('funciones', { method: 'POST', body: { funcion: 'direccion', musico_id: mgMus, modo: 'fijo', monto: '1500', moneda: 'USD', aplica: 'toca' } }); t(r.s === 201, 'y 1,500 fijos por dirección musical cuando toca');
+  r = await A('funciones', { method: 'POST', body: { funcion: 'booking', usuario_id: uK, modo: 'fijo', monto: '500', moneda: 'USD', aplica: 'propios' } }); t(r.s === 201, 'el booking cobra 500 fijos en sus eventos');
+  // gastos guardados
+  r = await A('gastos-guardados', { method: 'POST', body: { nombre: 'Transporte guagua', categoria: 'Transporte terrestre y combustible', monto: '400', moneda: 'USD', siempre: true } }); const gTr = r.j.id; t(r.s === 201, 'guarda el gasto «Transporte» con su precio');
+  // evento en EE. UU. con dirección por partes
+  t((await A('eventos', { method: 'POST', body: { nombre: 'Malo', fecha: dia(60), pais: 'Estados Unidos', estado_us: 'XX', banda_id: bandaId } })).s === 400, 'en EE. UU. pide un estado válido');
+  t((await A('eventos', { method: 'POST', body: { nombre: 'Malo', fecha: dia(60), pais: 'Estados Unidos', estado_us: 'FL', codigo_postal: '33' } })).s === 400, 'y un ZIP de 5 números');
+  r = await A('clientes', { method: 'POST', body: { nombre: 'Club Mango', lugar: 'Mango Club', pais: 'Estados Unidos', ciudad: 'Orlando', direccion: '1600 International Dr', estado_us: 'FL', codigo_postal: '32819', email: 'mango@club.local' } }); const cMango = r.j.id;
+  t(r.s === 201 && (await A('clientes/' + cMango)).j.estado_us === 'FL', 'el cliente guarda su dirección de EE. UU. y el nombre del local');
+  r = await A('eventos', { method: 'POST', body: { nombre: 'Noche en Mango', fecha: dia(62), pais: 'Estados Unidos', ciudad: 'Orlando', lugar: 'Mango Club', direccion: '1600 International Dr', estado_us: 'fl', codigo_postal: '32819', hora_show: '22:00', hora_fin: '01:00', banda_id: bandaId, cliente_id: cMango, booking_id: uK, precio: '10000', moneda: 'USD', tipo: 'privado', excepcion: true } });
+  const evM = r.j.id; t(r.s === 201, 'crea el evento con calle, ciudad, estado y ZIP', r.j);
+  r = await A('eventos/' + evM); t(r.j.estado_us === 'FL' && r.j.codigo_postal === '32819', 'guarda el estado en mayúsculas y el ZIP');
+  r = await A('eventos', { method: 'POST', body: { nombre: 'En RD', fecha: dia(63), pais: 'República Dominicana', direccion: 'Av. Winston Churchill 10, Piantini, Santo Domingo', estado_us: 'FL', excepcion: true } });
+  t((await A('eventos/' + r.j.id)).j.estado_us === null, 'fuera de EE. UU. la dirección va corrida (sin estado ni ZIP)');
+  await A('eventos/' + evM + '/equipo', { method: 'PUT', body: { musicos: [{ id: musId }, { id: mgMus }], excepcion: true } });
+  // armar la nómina: equipo + dirección musical (fijo al músico) + transporte (siempre) + comisiones del manager (10 %) y del booking (fijo)
+  r = await A(`eventos/${evM}/nomina/armar`, { method: 'POST' }); t(r.s === 200 && r.j.conceptos === 2 && r.j.comisiones === 2, 'arma la nómina con funciones, gastos guardados y comisiones', r.j);
+  t((await A(`eventos/${evM}/nomina/armar`, { method: 'POST' })).j.comisiones === 0, 'armar otra vez no repite nada');
+  r = await A(`eventos/${evM}/nomina`); const itMg = r.j.items.find((x) => x.musico_id === mgMus);
+  t(itMg && itMg.acordado === 3000 && itMg.extras === 1500 && itMg.neto === 4500, 'el manager cobra como músico y su dirección musical aparte', itMg);
+  const trans = r.j.conceptos.find((k) => k.gasto_id === gTr); t(trans && trans.monto === 400 && !trans.musico_id, 'el transporte guardado entra a la nómina con su precio');
+  r = await A(`eventos/${evM}/comisiones`); t(r.j.some((c) => c.funcion_id && c.monto === 1000 && /Manager/.test(c.beneficiario)) && r.j.some((c) => c.monto === 500 && c.relacion === 'booking'), 'las comisiones van separadas: 10 % del manager y el fijo del booking', r.j);
+  // cambiar el transporte, agregar combustible a un músico y borrar un renglón
+  const N0 = (await A(`eventos/${evM}/nomina`)).j;
+  const items = N0.items.map((x) => ({ musico_id: x.musico_id, acordado: x.acordado, moneda: x.moneda }));
+  let conc = N0.conceptos.map((k) => ({ id: k.id, musico_id: k.musico_id, concepto: k.concepto, categoria: k.categoria, monto: k.monto, moneda: k.moneda, funcion_id: k.funcion_id, gasto_id: k.gasto_id }));
+  conc = conc.map((k) => (k.gasto_id === gTr ? { ...k, monto: 450 } : k));
+  conc.push({ musico_id: musId, concepto: 'Combustible', categoria: 'Transporte terrestre y combustible', monto: 60 }, { concepto: 'Peaje', categoria: 'Transporte terrestre y combustible', monto: 25, moneda: 'USD' });
+  t((await A(`eventos/${evM}/nomina`, { method: 'PUT', body: { items, conceptos: conc } })).s === 200, 'guarda la nómina con renglones cambiados y nuevos');
+  r = await A(`eventos/${evM}/nomina`);
+  t(r.j.conceptos.find((k) => k.gasto_id === gTr).monto === 450 && r.j.items.find((x) => x.musico_id === musId).extras === 60, 'el precio del transporte cambió solo en esta nómina y el combustible se suma al músico');
+  t((await A('gastos-guardados')).j.gastos.find((g) => g.id === gTr).monto === 400, 'el gasto guardado conserva su precio original');
+  const peaje = r.j.conceptos.find((k) => k.concepto === 'Peaje');
+  const sinPeaje = r.j.conceptos.filter((k) => k.id !== peaje.id).map((k) => ({ ...k }));
+  t((await A(`eventos/${evM}/nomina`, { method: 'PUT', body: { items, conceptos: sinPeaje } })).s === 200 && !(await A(`eventos/${evM}/nomina`)).j.conceptos.some((k) => k.concepto === 'Peaje'), 'borra un renglón de la nómina');
+  const cu1 = (await A(`eventos/${evM}/cuadre`)).j.calculo;
+  t(Math.abs(cu1.nomina_total - (3000 + 1500 + (r.j.items.find((x) => x.musico_id === musId).acordado) + 60 + 450)) < 0.01 && cu1.comisiones_total === 1500, 'el cuadre suma músicos, extras y transporte; las comisiones aparte', cu1);
+  const tr2 = (await A(`eventos/${evM}/nomina`)).j.conceptos.find((k) => k.gasto_id === gTr);
+  r = await A(`eventos/${evM}/conceptos/${tr2.id}`, { method: 'POST', body: { metodo: 'efectivo', receptor: 'Transportes Pérez' } }); t(r.s === 201, 'paga el transporte (queda como gasto del evento)');
+  const cu2 = (await A(`eventos/${evM}/cuadre`)).j.calculo; t(Math.abs(cu2.salidas_total - cu1.salidas_total) < 0.01, 'pagarlo no lo cuenta dos veces en el cuadre', { cu1: cu1.salidas_total, cu2: cu2.salidas_total });
+  t((await A(`eventos/${evM}/nomina`, { method: 'PUT', body: { items, conceptos: [] } })).s === 409, 'un renglón ya pagado no se borra sin anular el pago');
+  t((await A(`eventos/${evM}/nomina/${mgMus}`, { method: 'POST', body: { monto: '4600', metodo: 'transferencia' } })).s === 400 && (await A(`eventos/${evM}/nomina/${mgMus}`, { method: 'POST', body: { monto: '4500', metodo: 'transferencia' } })).s === 201, 'al músico se le paga hasta lo acordado más sus extras');
+  r = await MG('portal/pagos'); t(r.s === 200 && r.j.some((x) => x.evento_id === evM && x.extras === 1500 && x.extras_detalle.length === 1), 'el manager ve sus pagos de músico con el detalle de sus extras');
+  // estudios de ensayo
+  r = await A('ensayos', { method: 'POST', body: { titulo: 'Ensayo en estudio nuevo', fecha: dia(70), hora_inicio: '19:00', banda_id: bandaId, lugar: 'Estudio La Bodega', direccion: 'Calle 5 #12, Naco' } });
+  r = await A('estudios'); const est = r.j.find((x) => x.nombre === 'Estudio La Bodega'); t(est && est.direccion === 'Calle 5 #12, Naco', 'un lugar de ensayo nuevo queda guardado como estudio');
+  r = await A('ensayos', { method: 'POST', body: { titulo: 'Otro ensayo', fecha: dia(77), hora_inicio: '19:00', banda_id: bandaId, estudio_id: est.id } });
+  t((await A('ensayos/' + r.j.ids[0])).j.lugar === 'Estudio La Bodega' && (await A('estudios')).j.filter((x) => x.nombre === 'Estudio La Bodega').length === 1, 'se escoge el estudio guardado sin repetirlo');
+  // qué puede hacer cada rol
+  r = await A('roles-info'); t(r.j.booking.resumen && r.j.booking.permisos.length > 3 && r.j.dueno.permisos.length > r.j.booking.permisos.length, 'explica qué puede hacer cada rol');
+  // portal del cliente
+  t((await A('usuarios', { method: 'POST', body: { email: 'x@cli.local', rol: 'cliente' } })).s === 400, 'al cliente se le da acceso desde su ficha');
+  r = await A(`clientes/${cMango}/invitar`, { method: 'POST' }); t(r.s === 200 && r.j.enlace, 'invita al cliente a su portal');
+  const CL = cliente(); await CL('invitacion/' + r.j.enlace.split('/').pop(), { method: 'POST', body: { nombre: 'Laura Mango', password: CLAVE } });
+  r = await CL('me'); t(r.j.rol === 'cliente' && r.j.cliente === true && !r.j.portal, 'el cliente entra a su portal', r.j);
+  t((await CL('bandas')).s === 403 && (await CL('eventos')).s === 403 && (await CL('portal/pagos')).s === 404, 'el cliente no ve la oficina ni el portal de músicos');
+  await A(`eventos/${evM}/movimientos`, { method: 'POST', body: { tipo: 'ingreso', categoria: 'anticipo', monto: '4000', moneda: 'USD', receptor: 'empresa' } });
+  r = await A(`eventos/${evM}/contratos`, { method: 'POST', body: { precio: '10000', moneda: 'USD', anticipo: '4000', condiciones: 'Dos tandas.' } }); const ctM = r.j.id || (await A('eventos/' + evM)).j.contratos[0].id;
+  r = await CL('cliente/inicio'); const evC = r.j.eventos.find((x) => x.id === evM);
+  t(evC && evC.precio === 10000 && evC.cobrado === 4000 && evC.saldo === 6000 && evC.pagos.length === 1, 've su depósito y lo que le falta', evC);
+  t(evC && !evC.contrato, 'no ve contratos en borrador');
+  t(r.j.eventos.every((x) => x.id !== ev1), 'solo ve los eventos de su cliente');
+  await A('contratos/' + ctM + '/estado', { method: 'PUT', body: { estado: 'enviado' } });
+  r = await CL('cliente/inicio'); t(r.j.eventos.find((x) => x.id === evM).contrato.estado === 'enviado', 've el contrato enviado');
+  r = await CL('cliente/contratos/' + ctM); t(r.s === 200 && r.j.datos.evento.estado_us === 'FL' && r.j.datos.cliente.codigo_postal === '32819', 'el contrato lleva la dirección de EE. UU. por partes', r.j.datos);
+  t((await CL(`cliente/contratos/${ctM}/firmar`, { method: 'POST', body: { nombre: 'Laura Mango', acepto: true } })).s === 400, 'para firmar hay que dibujar la firma');
+  r = await CL('archivos', { method: 'POST', body: { tipo: 'firma', datos: PNG } }); const firma = r.j.clave;
+  t((await CL(`cliente/contratos/${ctM}/firmar`, { method: 'POST', body: { nombre: 'Laura Mango', firma } })).s === 400, 'y marcar que acepta');
+  r = await CL(`cliente/contratos/${ctM}/firmar`, { method: 'POST', body: { nombre: 'Laura Mango', firma, acepto: true } }); t(r.s === 200 && r.j.huella.length === 64, 'el cliente firma el contrato desde su portal');
+  r = await A('contratos/' + ctM); t(r.j.estado === 'firmado' && r.j.firma.nombre === 'Laura Mango' && r.j.firma.url, 'la oficina ve la firma, la fecha y la huella');
+  t((await A(r.j.firma.url)).s === 200 && (await Bc(r.j.firma.url)).s === 404, 'la imagen de la firma es privada');
+  t((await CL(`cliente/contratos/${ctM}/firmar`, { method: 'POST', body: { nombre: 'Laura Mango', firma, acepto: true } })).s === 409, 'no se firma dos veces');
+  r = await CL('archivos', { method: 'POST', body: { tipo: 'flyer', datos: PNG } }); const fly = r.j.clave;
+  r = await CL('cliente/eventos/' + evM, { method: 'PUT', body: { lugar: 'Mango Club Orlando', hora_show: '22:30', hora_fin: '02:00', flyer: fly, estado_us: 'FL', codigo_postal: '32819' } });
+  t(r.s === 200 && r.j.cambios === 4, 'el cliente sube el flyer y cambia el local y las horas', r.j);
+  r = await A('eventos/' + evM); t(r.j.lugar === 'Mango Club Orlando' && r.j.hora_show === '22:30' && r.j.flyer_url && r.j.historial?.some?.((h) => /El cliente cambió/.test(h.cambio)) !== false, 'la oficina ve los cambios del cliente');
+  t((await P(r.j.flyer_url)).s === 200, 'los músicos del evento ven el flyer');
+  t((await CL('cliente/eventos/' + ev1)).s === 404 && (await CL('cliente/contratos/' + v2)).s === 404, 'no ve eventos ni contratos de otros clientes');
+  t((await A(`clientes/${cMango}/quitar-acceso`, { method: 'POST' })).s === 200 && (await CL('me')).s === 401, 'la oficina le puede quitar el acceso');
+
   titulo('Plataforma, suspensión y prueba vencida');
   t((await S('login', { method: 'POST', body: { email: 'plataforma@bandgo.local', password: CLAVE } })).s === 200, 'el superadministrador entra');
   r = await S('plataforma/empresas'); t(r.j.length === 2, 've las dos empresas', r.j); const listaInicial = r.j;

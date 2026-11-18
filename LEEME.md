@@ -8,7 +8,7 @@ Doble clic en **`tools/Publicar BandGo.bat`**. Hace todo: baja de GitHub, instal
 crea la base `bandgo-db` y el bucket `bandgo-archivos` la primera vez, respalda, migra, publica y crea la llave de cifrado.
 Al final abre la página: la primera vez pide crear el usuario de la plataforma.
 
-## Qué hay (v0.7 · Fases 0 a 7)
+## Qué hay (v0.8 · Fases 0 a 7 + mejoras)
 - **Fase 0 · núcleo (copiado de FoodPOS):** login, registro con prueba de 15 días, «¿olvidó su contraseña?», dos pasos (opcional y recomendado; para exigirlo a la plataforma, variable DOS_PASOS_OBLIGATORIO = 1), la plataforma crea empresas y manda el enlace al dueño,
   frenos por conexión, Turnstile, avisos de seguridad, cifrado AES-GCM, bitácora, errores, Plataforma (empresas, planes, ajustes, errores),
   varias empresas por usuario, roles (dueño, admin, manager, booking, músico, sonidista, promotor) y permisos por acción que el dueño puede cambiar.
@@ -60,6 +60,16 @@ Al final abre la página: la primera vez pide crear el usuario de la plataforma.
   (botón en su ficha), directos y grupos; fotos y PDF, responder citando, editar 15 minutos, borrar (la oficina puede
   ocultar con constancia en la bitácora), canales «solo la oficina escribe» y archivados; insignias de no leídos.
   En el portal, la pestaña «Mensajes» (Avisos y Chat); «Mis documentos» pasó a Perfil.
+
+- **v0.8 · mejoras:** una persona puede ser músico y, a la vez, manager, booking o administrador de la empresa
+  (un solo usuario enlazado a su ficha de integrante; ve «Mi perfil de músico» en el menú). Funciones con pago en cada
+  integrante (manager, booking, administración, dirección musical u otra): fijo por evento o % de comisión.
+  Gastos guardados con precio (transporte, combustible…) que se cambian en cada nómina. La nómina se arma sola
+  (músicos por un lado; comisiones aparte), con renglones de extras y gastos (combustible y otros que se escriben) y
+  botón para borrar cada renglón. Direcciones de EE. UU. (calle, ciudad, estado, ZIP) y una sola línea en otros países.
+  El evento toma la dirección del cliente. Estudios de ensayo guardados (si se escribe uno nuevo, se registra solo).
+  Etiquetas de rol que se despliegan con lo que puede hacer. Portal del cliente: ve y firma el contrato (firma dibujada,
+  nombre, fecha, IP y huella), ve anticipo, pagado y lo que falta, y sube el flyer, el local, la dirección y las horas.
 
 ## Lo que sigue
 

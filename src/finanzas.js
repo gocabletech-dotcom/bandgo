@@ -9,7 +9,7 @@ export const CAT_EVENTO = ['Dietas y alimentación', 'Vuelos y equipaje', 'Hospe
 export const CAT_GENERAL = ['Oficina y administración', 'Teléfono e internet', 'Publicidad', 'Honorarios profesionales', 'Servicios y mantenimiento', 'Otros'];
 const RECEPTORES = ['booking', 'manager', 'artista', 'empresa', 'otro'];
 
-async function siguiente(db, E, prefijo) {
+export async function siguiente(db, E, prefijo) {
   const r = await db.prepare('INSERT INTO correlativos (empresa_id, prefijo, ultimo) VALUES (?, ?, 1) ON CONFLICT(empresa_id, prefijo) DO UPDATE SET ultimo = ultimo + 1 RETURNING ultimo').bind(E, prefijo).first();
   return `${prefijo}-${String(r.ultimo).padStart(5, '0')}`;
 }
@@ -22,7 +22,7 @@ export async function tasaDe(db, E, de, a, dia) {
   return i ? { tasa_e6: Math.round(1e12 / i.tasa_e6), fecha: i.fecha, fuente: (i.fuente || '') + ' (inversa)' } : null;
 }
 // convierte un importe a la moneda del evento; la tasa puede venir escrita (manual) o de la tabla de tasas
-async function convertir(db, E, monto_c, mon, monEvento, dia, d) {
+export async function convertir(db, E, monto_c, mon, monEvento, dia, d) {
   if (mon === monEvento) return { tasa_e6: null, tasa_fecha: null, tasa_fuente: null, monto_evento_c: monto_c };
   let t = null;
   if (d && d.tasa) { const n = Number(String(d.tasa).replace(',', '.')); if (!(n > 0)) throw Object.assign(new Error('La tasa no es válida'), { publico: true }); t = { tasa_e6: Math.round(n * 1e6), fecha: dia, fuente: txt(d.tasa_fuente, 60) || 'Escrita al registrar' }; }
@@ -38,7 +38,7 @@ async function cuadreDe(db, E, eventoId) {
   return c;
 }
 // cualquier cambio en las finanzas del evento: si estaba aprobado no se deja; si estaba en revisión vuelve a «abierto»
-async function puedeTocar(db, E, ev) {
+export async function puedeTocar(db, E, ev) {
   const c = await cuadreDe(db, E, ev.id);
   if (c.estado === 'aprobado') throw Object.assign(new Error('El cuadre de este evento está aprobado. Para corregir, ábralo otra vez (se crea una versión nueva y hay que aprobarla de nuevo).'), { publico: true, estado: 409 });
   if (['en_revision', 'con_artista'].includes(c.estado)) {
@@ -57,18 +57,21 @@ export async function calcularCuadre(db, E, ev) {
   const porEntregar = sum((m) => m.tipo === 'ingreso' && !m.entregado);
   const sinConfirmar = sum((m) => m.tipo === 'ingreso' && !m.confirmado_en);
   const gastos = {};
-  for (const m of movs.filter((x) => x.tipo === 'gasto' && x.cubierto_por !== 'cliente')) gastos[m.categoria || 'Otros'] = (gastos[m.categoria || 'Otros'] || 0) + m.monto_evento_c;
+  for (const m of movs.filter((x) => x.tipo === 'gasto' && x.cubierto_por !== 'cliente' && !x.nomina_concepto_id)) gastos[m.categoria || 'Otros'] = (gastos[m.categoria || 'Otros'] || 0) + m.monto_evento_c;
   const gastosCliente = sum((m) => m.tipo === 'gasto' && m.cubierto_por === 'cliente');
   const gastosTotal = Object.values(gastos).reduce((a, b) => a + b, 0);
   // nómina: lo acordado menos descuentos, convertido a la moneda del evento con la tasa de la fecha del evento
   const items = (await db.prepare('SELECT n.*, m.nombre FROM nomina n JOIN musicos m ON m.id = n.musico_id WHERE n.evento_id = ?').bind(ev.id).all()).results;
   let nominaTotal = 0;
   for (const it of items) {
-    const neto = it.acordado_c - (it.descuento_c || 0);
+    const neto = it.acordado_c - (it.descuento_c || 0) + (it.extras_c || 0);
     if (it.moneda === M) nominaTotal += neto;
     else { const t = await tasaDe(db, E, it.moneda, M, ev.fecha); if (!t) faltan.push(`tasa ${it.moneda}→${M} (nómina de ${it.nombre})`); else nominaTotal += Math.round(neto * t.tasa_e6 / 1e6); }
   }
-  const nominaPagada = sum((m) => m.tipo === 'nomina');
+  // renglones generales de la nómina (transporte, combustible…): cuentan aunque todavía no se hayan pagado
+  const generales = (await db.prepare('SELECT * FROM nomina_conceptos WHERE evento_id = ? AND musico_id IS NULL').bind(ev.id).all()).results;
+  for (const g of generales) { if (g.moneda === M) nominaTotal += g.monto_c; else { const t = await tasaDe(db, E, g.moneda, M, ev.fecha); if (!t) faltan.push(`tasa ${g.moneda}→${M} (${g.concepto})`); else nominaTotal += Math.round(g.monto_c * t.tasa_e6 / 1e6); } }
+  const nominaPagada = sum((m) => m.tipo === 'nomina' || (m.tipo === 'gasto' && m.nomina_concepto_id));
   const coms = (await db.prepare("SELECT * FROM comisiones WHERE evento_id = ? AND estado != 'anulada'").bind(ev.id).all()).results;
   let comTotal = 0;
   for (const c of coms) { if (c.moneda === M) comTotal += c.monto_c; else { const t = await tasaDe(db, E, c.moneda, M, ev.fecha); if (!t) faltan.push(`tasa ${c.moneda}→${M} (comisión de ${c.beneficiario})`); else comTotal += Math.round(c.monto_c * t.tasa_e6 / 1e6); } }
@@ -82,6 +85,86 @@ export async function calcularCuadre(db, E, ev) {
     comisiones_total: cent(comTotal), salidas_total: cent(salidas), resultado: cent(contratado - salidas), resultado_cobrado: cent(cobrado - salidas),
     sin_comprobante: sinComprobante, faltan_tasas: faltan, movimientos: movs.length,
   };
+}
+
+// guarda los renglones extra de la nómina; los generales ya pagados no se pueden quitar ni cambiar
+async function guardarConceptos(db, E, ev, lista, enNomina) {
+  const monedaDe = Object.fromEntries(enNomina.map((x) => [x.musico_id, x.moneda]));
+  const actuales = (await db.prepare('SELECT k.*, x.id AS mov FROM nomina_conceptos k LEFT JOIN movimientos x ON x.nomina_concepto_id = k.id AND x.anulado = 0 WHERE k.evento_id = ?').bind(ev.id).all()).results;
+  const pagados = actuales.filter((k) => k.mov);
+  if (!Array.isArray(lista)) return async () => { // sin lista: solo se van los renglones de quien salió de la nómina
+    await db.prepare(`DELETE FROM nomina_conceptos WHERE evento_id = ? AND musico_id IS NOT NULL${enNomina.length ? ` AND musico_id NOT IN (${enNomina.map(() => '?').join(',')})` : ''}`).bind(ev.id, ...enNomina.map((x) => x.musico_id)).run();
+    await recalcularExtras(db, ev.id);
+  };
+  {
+    const nuevos = [];
+    for (const x of lista.slice(0, 100)) {
+      const concepto = txt(x.concepto, 80), monto = aCentavos(x.monto), mid = Number(x.musico_id) || null;
+      if (!concepto) return err('Escriba el concepto de cada renglón extra');
+      if (monto == null || monto < 0) return err(`Escriba el importe de «${concepto}»`);
+      if (mid && !monedaDe[mid]) continue; // el músico ya no está en la nómina
+      nuevos.push({ id: Number(x.id) || null, musico_id: mid, concepto, categoria: CAT_EVENTO.includes(x.categoria) ? x.categoria : 'Otros', monto_c: monto, moneda: mid ? monedaDe[mid] : moneda(x.moneda, ev.moneda), funcion_id: Number(x.funcion_id) || null, gasto_id: Number(x.gasto_id) || null });
+    }
+    for (const p of pagados) { const n = nuevos.find((x) => x.id === p.id); if (!n || n.monto_c !== p.monto_c || n.moneda !== p.moneda) return err(`«${p.concepto}» ya se pagó: para cambiarlo o quitarlo, anule primero ese pago.`, 409); }
+    const quedan = nuevos.filter((x) => !pagados.some((p) => p.id === x.id));
+    return async () => { await db.batch([db.prepare(`DELETE FROM nomina_conceptos WHERE evento_id = ?${pagados.length ? ` AND id NOT IN (${pagados.map(() => '?').join(',')})` : ''}`).bind(ev.id, ...pagados.map((p) => p.id)),
+      ...quedan.map((x) => db.prepare('INSERT INTO nomina_conceptos (evento_id, empresa_id, musico_id, concepto, categoria, monto_c, moneda, funcion_id, gasto_id) VALUES (?,?,?,?,?,?,?,?,?)').bind(ev.id, E, x.musico_id, x.concepto, x.categoria, x.monto_c, x.moneda, x.funcion_id, x.gasto_id))]);
+    await recalcularExtras(db, ev.id); };
+  }
+}
+async function recalcularExtras(db, eventoId) {
+  await db.prepare('UPDATE nomina SET extras_c = COALESCE((SELECT SUM(k.monto_c) FROM nomina_conceptos k WHERE k.evento_id = nomina.evento_id AND k.musico_id = nomina.musico_id AND k.moneda = nomina.moneda), 0) WHERE evento_id = ?').bind(eventoId).run();
+}
+// arma la nómina: equipo con su tarifa, pagos fijos de funciones (manager, administración…), comisiones (fijas de quien no toca
+// o por porcentaje) y los gastos guardados marcados «siempre». No repite lo que ya está.
+export async function armarNomina(db, E, ev, user) {
+  const out = { musicos: 0, conceptos: 0, comisiones: 0 };
+  let items = (await db.prepare('SELECT musico_id, moneda FROM nomina WHERE evento_id = ?').bind(ev.id).all()).results;
+  const equipo = (await db.prepare(`SELECT m.id, m.usuario_id, a.funcion, COALESCE(bm.tarifa_c, m.tarifa_c) AS tarifa_c, COALESCE(bm.moneda, m.tarifa_moneda) AS moneda FROM evento_asignaciones a JOIN musicos m ON m.id = a.musico_id
+    LEFT JOIN banda_miembros bm ON bm.musico_id = m.id AND bm.banda_id = ? WHERE a.evento_id = ?`).bind(ev.banda_id || 0, ev.id).all()).results;
+  if (!items.length && equipo.length) {
+    await db.batch(equipo.map((m) => db.prepare('INSERT OR IGNORE INTO nomina (evento_id, musico_id, empresa_id, funcion, acordado_c, moneda) VALUES (?,?,?,?,?,?)').bind(ev.id, m.id, E, m.funcion, (m.moneda || ev.moneda) === ev.moneda ? m.tarifa_c || 0 : 0, ev.moneda)));
+    out.musicos = equipo.length; items = equipo.map((m) => ({ musico_id: m.id, moneda: ev.moneda }));
+  }
+  const fs = (await db.prepare(`SELECT f.*, m.nombre AS m_nombre, m.usuario_id AS m_usuario, u.nombre AS u_nombre FROM funciones_pago f LEFT JOIN musicos m ON m.id = f.musico_id LEFT JOIN usuarios u ON u.id = f.usuario_id
+    WHERE f.empresa_id = ? AND f.activo = 1 AND (f.banda_id IS NULL OR f.banda_id = ?) AND (f.musico_id IS NULL OR m.activo = 1)`).bind(E, ev.banda_id || 0).all()).results;
+  const yaConc = new Set((await db.prepare('SELECT funcion_id FROM nomina_conceptos WHERE evento_id = ? AND funcion_id IS NOT NULL').bind(ev.id).all()).results.map((r) => r.funcion_id));
+  const yaCom = new Set((await db.prepare("SELECT funcion_id FROM comisiones WHERE evento_id = ? AND funcion_id IS NOT NULL AND estado != 'anulada'").bind(ev.id).all()).results.map((r) => r.funcion_id));
+  const enEquipo = new Set(equipo.map((m) => m.id));
+  const NOMBRE = { manager: 'Manager', booking: 'Booking', administracion: 'Administración', direccion: 'Dirección musical', otra: 'Otra función' };
+  let cobrado = null;
+  for (const f of fs) {
+    const usuario = f.usuario_id || f.m_usuario, quien = f.m_nombre || f.u_nombre || '—', etiqueta = f.nombre || NOMBRE[f.funcion] || f.funcion;
+    const aplica = f.aplica === 'toca' ? !!f.musico_id && enEquipo.has(f.musico_id)
+      : f.aplica === 'propios' ? !!usuario && (ev.booking_id === usuario || ev.manager_id === usuario) : true;
+    if (!aplica) continue;
+    if (f.modo === 'fijo' && f.musico_id) {
+      if (yaConc.has(f.id)) continue;
+      const mon = f.moneda || ev.moneda;
+      if (!items.some((i) => i.musico_id === f.musico_id)) { await db.prepare('INSERT OR IGNORE INTO nomina (evento_id, musico_id, empresa_id, funcion, acordado_c, moneda) VALUES (?,?,?,?,0,?)').bind(ev.id, f.musico_id, E, etiqueta, mon).run(); items.push({ musico_id: f.musico_id, moneda: mon }); }
+      const it = items.find((i) => i.musico_id === f.musico_id);
+      await db.prepare('INSERT INTO nomina_conceptos (evento_id, empresa_id, musico_id, concepto, categoria, monto_c, moneda, funcion_id) VALUES (?,?,?,?,?,?,?,?)').bind(ev.id, E, f.musico_id, etiqueta, 'Otros', f.monto_c || 0, it.moneda, f.id).run();
+      out.conceptos++;
+    } else {
+      if (yaCom.has(f.id)) continue;
+      let monto = f.monto_c || 0, mon = f.moneda || ev.moneda;
+      if (f.modo === 'porcentaje') {
+        if (f.base === 'cobrado' && cobrado == null) cobrado = Math.round((await calcularCuadre(db, E, ev)).cobrado * 100);
+        monto = Math.round((f.base === 'cobrado' ? cobrado : ev.precio_c || 0) * (f.porcentaje_e2 || 0) / 10000); mon = ev.moneda;
+      }
+      await db.prepare('INSERT INTO comisiones (empresa_id, evento_id, beneficiario, usuario_id, musico_id, relacion, modo, porcentaje_e2, base, monto_c, moneda, funcion_id, creado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .bind(E, ev.id, `${quien} (${etiqueta})`, usuario || null, f.musico_id || null, f.funcion === 'booking' ? 'booking' : 'otro', f.modo, f.modo === 'porcentaje' ? f.porcentaje_e2 : null, f.modo === 'porcentaje' ? f.base : null, monto, mon, f.id, user.id).run();
+      out.comisiones++;
+    }
+  }
+  const yaG = new Set((await db.prepare('SELECT gasto_id FROM nomina_conceptos WHERE evento_id = ? AND gasto_id IS NOT NULL').bind(ev.id).all()).results.map((r) => r.gasto_id));
+  for (const g of (await db.prepare('SELECT * FROM gastos_guardados WHERE empresa_id = ? AND activo = 1 AND siempre = 1').bind(E).all()).results) {
+    if (yaG.has(g.id)) continue;
+    await db.prepare('INSERT INTO nomina_conceptos (evento_id, empresa_id, musico_id, concepto, categoria, monto_c, moneda, gasto_id) VALUES (?,?,NULL,?,?,?,?,?)').bind(ev.id, E, g.nombre, g.categoria, g.monto_c, g.moneda, g.id).run();
+    out.conceptos++;
+  }
+  await recalcularExtras(db, ev.id);
+  return out;
 }
 
 export async function rutasFinanzas(L) {
@@ -176,14 +259,14 @@ export async function rutasFinanzas(L) {
     if (!m) return err('No encontrado', 404);
     if (!(puede('finanzas.ver') || puede('nomina.ver') || m.usuario_id === user.id)) return err('Sin permiso', 403);
     let item = null;
-    if (m.tipo === 'nomina') { const n = await db.prepare('SELECT acordado_c, descuento_c, moneda FROM nomina WHERE evento_id = ? AND musico_id = ?').bind(m.evento_id, m.musico_id).first();
+    if (m.tipo === 'nomina') { const n = await db.prepare('SELECT acordado_c, descuento_c, extras_c, moneda FROM nomina WHERE evento_id = ? AND musico_id = ?').bind(m.evento_id, m.musico_id).first();
       const pag = (await db.prepare("SELECT SUM(monto_c) c FROM movimientos WHERE evento_id = ? AND musico_id = ? AND tipo = 'nomina' AND anulado = 0 AND moneda = ?").bind(m.evento_id, m.musico_id, n ? n.moneda : m.moneda).first()).c || 0;
-      if (n) item = { acordado: cent(n.acordado_c - (n.descuento_c || 0)), pagado: cent(pag), pendiente: cent(Math.max(0, n.acordado_c - (n.descuento_c || 0) - pag)), moneda: n.moneda }; }
+      if (n) item = { acordado: cent(n.acordado_c - (n.descuento_c || 0) + (n.extras_c || 0)), pagado: cent(pag), pendiente: cent(Math.max(0, n.acordado_c - (n.descuento_c || 0) + (n.extras_c || 0) - pag)), moneda: n.moneda }; }
     return json({ ...movPub(m), empresa: empresa.nombre, item, usuario_id: undefined });
   }
 
   // ---------- finanzas de un evento ----------
-  if (mod === 'eventos' && id && ['finanzas', 'movimientos', 'nomina', 'comisiones', 'cuadre'].includes(accion)) {
+  if (mod === 'eventos' && id && ['finanzas', 'movimientos', 'nomina', 'comisiones', 'cuadre', 'conceptos'].includes(accion)) {
     const f = await evFin(id); if (f.e) return f.e;
     const { ev } = f;
     if (!f.ver) return err('No puede ver las finanzas de este evento', 403);
@@ -227,8 +310,12 @@ export async function rutasFinanzas(L) {
         const pagos = (await db.prepare("SELECT * FROM movimientos WHERE evento_id = ? AND tipo = 'nomina' AND anulado = 0 ORDER BY fecha, id").bind(id).all()).results;
         const sugerida = !items.length ? (await db.prepare(`SELECT m.id AS musico_id, m.nombre, m.instrumento, a.funcion, COALESCE(bm.tarifa_c, m.tarifa_c) AS tarifa_c, COALESCE(bm.moneda, m.tarifa_moneda) AS moneda FROM evento_asignaciones a JOIN musicos m ON m.id = a.musico_id
           LEFT JOIN banda_miembros bm ON bm.musico_id = m.id AND bm.banda_id = ? WHERE a.evento_id = ? ORDER BY m.nombre`).bind(ev.banda_id || 0, id).all()).results.map((x) => ({ ...x, tarifa: cent(x.tarifa_c), tarifa_c: undefined })) : null;
-        return json({ moneda: ev.moneda, editar: puede('nomina.editar'), pagar: puede('nomina.pagar'), sugerida, items: items.map((it) => { const ps = pagos.filter((p) => p.musico_id === it.musico_id); const pag = ps.filter((p) => p.moneda === it.moneda).reduce((a, p) => a + p.monto_c, 0); const neto = it.acordado_c - (it.descuento_c || 0);
-          return { musico_id: it.musico_id, nombre: it.nombre, instrumento: it.instrumento, whatsapp: it.whatsapp, foto_url: it.foto_r2 ? '/api/archivo/' + encodeURIComponent(it.foto_r2) : null, funcion: it.funcion, sustituto: !!it.sustituto, moneda: it.moneda, excepcion: it.excepcion, acordado: cent(it.acordado_c), descuento: cent(it.descuento_c), descuento_motivo: it.descuento_motivo, neto: cent(neto), pagado: cent(pag), pendiente: cent(Math.max(0, neto - pag)),
+        const conceptos = (await db.prepare('SELECT k.*, m.nombre AS musico, x.id AS movimiento_id, x.codigo AS movimiento_codigo FROM nomina_conceptos k LEFT JOIN musicos m ON m.id = k.musico_id LEFT JOIN movimientos x ON x.nomina_concepto_id = k.id AND x.anulado = 0 WHERE k.evento_id = ? ORDER BY k.musico_id IS NULL, m.nombre, k.id').bind(id).all()).results
+          .map((k) => ({ id: k.id, musico_id: k.musico_id, musico: k.musico, concepto: k.concepto, categoria: k.categoria, monto: cent(k.monto_c), moneda: k.moneda, funcion_id: k.funcion_id, gasto_id: k.gasto_id, pagado: !!k.movimiento_id, movimiento_codigo: k.movimiento_codigo }));
+        const guardados = (await db.prepare('SELECT id, nombre, categoria, monto_c, moneda, siempre FROM gastos_guardados WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(E).all()).results.map((g) => ({ ...g, monto: cent(g.monto_c), monto_c: undefined }));
+        const nFunciones = (await db.prepare('SELECT COUNT(*) n FROM funciones_pago WHERE empresa_id = ? AND activo = 1').bind(E).first()).n;
+        return json({ moneda: ev.moneda, editar: puede('nomina.editar'), pagar: puede('nomina.pagar'), conceptos, guardados, funciones: nFunciones, categorias: CAT_EVENTO, sugerida, items: items.map((it) => { const ps = pagos.filter((p) => p.musico_id === it.musico_id); const pag = ps.filter((p) => p.moneda === it.moneda).reduce((a, p) => a + p.monto_c, 0); const neto = it.acordado_c - (it.descuento_c || 0) + (it.extras_c || 0);
+          return { musico_id: it.musico_id, nombre: it.nombre, instrumento: it.instrumento, whatsapp: it.whatsapp, foto_url: it.foto_r2 ? '/api/archivo/' + encodeURIComponent(it.foto_r2) : null, funcion: it.funcion, sustituto: !!it.sustituto, moneda: it.moneda, excepcion: it.excepcion, acordado: cent(it.acordado_c), descuento: cent(it.descuento_c), descuento_motivo: it.descuento_motivo, extras: cent(it.extras_c || 0), neto: cent(neto), pagado: cent(pag), pendiente: cent(Math.max(0, neto - pag)),
             pagos: ps.map((p) => ({ id: p.id, codigo: p.codigo, fecha: p.fecha, monto: cent(p.monto_c), moneda: p.moneda, metodo: p.metodo, referencia: p.referencia, confirmado: !!p.confirmado_en, discrepancia: p.discrepancia, comprobante_url: p.comprobante_r2 ? '/api/archivo/' + encodeURIComponent(p.comprobante_r2) : null })) }; }) });
       }
       if (method === 'PUT' && !sub) { const e0 = no('nomina.editar'); if (e0) return e0;
@@ -239,17 +326,26 @@ export async function rutasFinanzas(L) {
         const conPagos = new Set((await db.prepare("SELECT DISTINCT musico_id FROM movimientos WHERE evento_id = ? AND tipo = 'nomina' AND anulado = 0").bind(id).all()).results.map((x) => x.musico_id));
         const quedan = new Set(lista.map((x) => Number(x.musico_id)));
         for (const mId of conPagos) if (!quedan.has(mId)) return err('No se puede quitar de la nómina a quien ya tiene pagos. Anule primero sus pagos.', 409);
+        const aplicarConceptos = await guardarConceptos(db, E, ev, d.conceptos, lista.map((x) => ({ musico_id: Number(x.musico_id), moneda: moneda(x.moneda, ev.moneda) })));
+        if (aplicarConceptos instanceof Response) return aplicarConceptos;
         await db.batch([db.prepare('DELETE FROM nomina WHERE evento_id = ?').bind(id), ...lista.map((x) => db.prepare('INSERT INTO nomina (evento_id, musico_id, empresa_id, funcion, sustituto, acordado_c, moneda, descuento_c, descuento_motivo, excepcion) VALUES (?,?,?,?,?,?,?,?,?,?)')
           .bind(id, Number(x.musico_id), E, txt(x.funcion, 60), x.sustituto ? 1 : 0, aCentavos(x.acordado), moneda(x.moneda, ev.moneda), aCentavos(x.descuento) || 0, txt(x.descuento_motivo, 120), moneda(x.moneda, ev.moneda) !== ev.moneda ? txt(x.excepcion, 200) : null))]);
-        await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(id, user.id, `Nómina: ${lista.length} músicos`).run();
+        await aplicarConceptos();
+        await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(id, user.id, `Nómina: ${lista.length} músicos${Array.isArray(d.conceptos) ? ' · ' + d.conceptos.length + ' renglones extra' : ''}`).run();
         await auditar(ctx, 'nomina_guardada', 'evento', id, `${lista.length} músicos`); return json({ ok: true });
+      }
+      if (method === 'POST' && sub === 'armar') { const e0 = no('nomina.editar'); if (e0) return e0;
+        await puedeTocar(db, E, ev);
+        const r = await armarNomina(db, E, ev, user);
+        await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(id, user.id, `Nómina armada: ${r.musicos} músicos, ${r.conceptos} renglones extra, ${r.comisiones} comisiones`).run();
+        await auditar(ctx, 'nomina_armada', 'evento', id, JSON.stringify(r)); return json({ ok: true, ...r });
       }
       if (method === 'POST' && sub && accion === 'nomina') { const e0 = no('nomina.pagar'); if (e0) return e0;
         const it = await db.prepare('SELECT n.*, m.nombre FROM nomina n JOIN musicos m ON m.id = n.musico_id WHERE n.evento_id = ? AND n.musico_id = ?').bind(id, Number(sub)).first(); if (!it) return err('No está en la nómina', 404);
         const monto = aCentavos(d.monto); if (!(monto > 0)) return err('Escriba el importe');
         await puedeTocar(db, E, ev);
         const pag = (await db.prepare("SELECT COALESCE(SUM(monto_c),0) c FROM movimientos WHERE evento_id = ? AND musico_id = ? AND tipo = 'nomina' AND anulado = 0 AND moneda = ?").bind(id, it.musico_id, it.moneda).first()).c;
-        if (pag + monto > it.acordado_c - (it.descuento_c || 0)) return err(`Eso pasa lo acordado. Pendiente: ${it.moneda} ${((it.acordado_c - (it.descuento_c || 0) - pag) / 100).toLocaleString('en-US')}`);
+        if (pag + monto > it.acordado_c - (it.descuento_c || 0) + (it.extras_c || 0)) return err(`Eso pasa lo acordado. Pendiente: ${it.moneda} ${((it.acordado_c - (it.descuento_c || 0) + (it.extras_c || 0) - pag) / 100).toLocaleString('en-US')}`);
         const conv = await convertir(db, E, monto, it.moneda, ev.moneda, fecha(d.fecha) || hoy(), d);
         const comp = d.comprobante ? (await db.prepare("SELECT clave FROM archivos WHERE clave = ? AND empresa_id = ? AND tipo = 'documento'").bind(d.comprobante, E).first())?.clave : null;
         const codigo = await siguiente(db, E, 'PAG');
@@ -259,6 +355,22 @@ export async function rutasFinanzas(L) {
         await auditar(ctx, 'pago_musico', 'movimiento', r.id, `${codigo} ${it.nombre} ${it.moneda} ${monto / 100}`);
         return json({ ok: true, id: r.id, codigo }, 201);
       }
+    }
+    // pagar un renglón general de la nómina (transporte, combustible…): queda como gasto del evento
+    if (accion === 'conceptos' && sub && method === 'POST') { const e0 = no('nomina.pagar'); if (e0) return e0;
+      const k = await db.prepare('SELECT * FROM nomina_conceptos WHERE id = ? AND evento_id = ?').bind(Number(sub), id).first(); if (!k) return err('No encontrado', 404);
+      if (k.musico_id) return err('Este renglón se paga junto con el pago del músico');
+      if (await db.prepare('SELECT 1 FROM movimientos WHERE nomina_concepto_id = ? AND anulado = 0').bind(k.id).first()) return err('Ya está pagado', 409);
+      await puedeTocar(db, E, ev);
+      const dia = fecha(d.fecha) || hoy(), conv = await convertir(db, E, k.monto_c, k.moneda, ev.moneda, dia, d);
+      const comp = d.comprobante ? (await db.prepare("SELECT clave FROM archivos WHERE clave = ? AND empresa_id = ? AND tipo = 'documento'").bind(d.comprobante, E).first())?.clave : null;
+      const codigo = await siguiente(db, E, 'MOV');
+      const r = await db.prepare(`INSERT INTO movimientos (empresa_id, codigo, evento_id, tipo, categoria, descripcion, fecha, monto_c, moneda, tasa_e6, tasa_fecha, tasa_fuente, monto_evento_c, metodo, referencia, pagador, receptor, cubierto_por, comprobante_r2, nomina_concepto_id, creado_por)
+        VALUES (?,?,?, 'gasto', ?,?,?,?,?,?,?,?,?,?,?,?,?, 'empresa', ?,?,?) RETURNING id`).bind(E, codigo, id, k.categoria || 'Otros', k.concepto, dia, k.monto_c, k.moneda, conv.tasa_e6, conv.tasa_fecha, conv.tasa_fuente, conv.monto_evento_c,
+        METODOS.includes(d.metodo) ? d.metodo : null, txt(d.referencia, 80), txt(d.pagador, 80) || user.nombre, txt(d.receptor, 80), comp, k.id, user.id).first();
+      await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(id, user.id, `Pago de ${k.concepto} (${codigo})`).run();
+      await auditar(ctx, 'nomina_concepto_pagado', 'movimiento', r.id, `${codigo} ${k.concepto} ${k.moneda} ${k.monto_c / 100}`);
+      return json({ ok: true, id: r.id, codigo }, 201);
     }
     // comisiones
     if (accion === 'comisiones') {
@@ -374,7 +486,7 @@ export async function rutasFinanzas(L) {
   }
   if (mod === 'nominas' && method === 'GET') {
     if (!puede('nomina.ver')) return err('Sin permiso', 403);
-    const rs = (await db.prepare(`SELECT e.id, e.codigo, e.nombre, e.fecha, e.moneda, b.nombre AS banda, COUNT(n.musico_id) AS musicos, SUM(n.acordado_c - n.descuento_c) AS acordado_c,
+    const rs = (await db.prepare(`SELECT e.id, e.codigo, e.nombre, e.fecha, e.moneda, b.nombre AS banda, COUNT(n.musico_id) AS musicos, SUM(n.acordado_c - n.descuento_c + n.extras_c) AS acordado_c,
       (SELECT COALESCE(SUM(monto_c),0) FROM movimientos m WHERE m.evento_id = e.id AND m.tipo = 'nomina' AND m.anulado = 0) AS pagado_c,
       (SELECT COUNT(*) FROM movimientos m WHERE m.evento_id = e.id AND m.tipo = 'nomina' AND m.anulado = 0 AND m.discrepancia IS NOT NULL) AS discrepancias
       FROM eventos e LEFT JOIN nomina n ON n.evento_id = e.id LEFT JOIN bandas b ON b.id = e.banda_id WHERE e.empresa_id = ? AND e.estado NOT IN ('cancelado','cotizacion') GROUP BY e.id ORDER BY e.fecha DESC LIMIT 200`).bind(E).all()).results;
@@ -387,9 +499,10 @@ export async function rutasFinanzas(L) {
     if (!m) return err('Su usuario no está enlazado a un integrante de esta empresa.', 404);
     if (method === 'GET') {
       const items = (await db.prepare('SELECT n.*, e.codigo, e.nombre, e.fecha FROM nomina n JOIN eventos e ON e.id = n.evento_id WHERE n.musico_id = ? AND n.empresa_id = ? ORDER BY e.fecha DESC').bind(m.id, E).all()).results;
+      const conc = (await db.prepare('SELECT evento_id, concepto, monto_c, moneda FROM nomina_conceptos WHERE musico_id = ? AND empresa_id = ?').bind(m.id, E).all()).results;
       const pagos = (await db.prepare("SELECT id, codigo, evento_id, fecha, monto_c, moneda, metodo, referencia, confirmado_en, discrepancia, descripcion FROM movimientos WHERE musico_id = ? AND empresa_id = ? AND tipo = 'nomina' AND anulado = 0 ORDER BY fecha DESC, id DESC").bind(m.id, E).all()).results;
-      return json(items.map((it) => { const ps = pagos.filter((p) => p.evento_id === it.evento_id); const neto = it.acordado_c - (it.descuento_c || 0); const pag = ps.filter((p) => p.moneda === it.moneda).reduce((a, p) => a + p.monto_c, 0);
-        return { evento_id: it.evento_id, codigo: it.codigo, evento: it.nombre, fecha: it.fecha, moneda: it.moneda, acordado: cent(it.acordado_c), descuento: cent(it.descuento_c), descuento_motivo: it.descuento_motivo, neto: cent(neto), pagado: cent(pag), pendiente: cent(Math.max(0, neto - pag)),
+      return json(items.map((it) => { const ps = pagos.filter((p) => p.evento_id === it.evento_id); const neto = it.acordado_c - (it.descuento_c || 0) + (it.extras_c || 0); const pag = ps.filter((p) => p.moneda === it.moneda).reduce((a, p) => a + p.monto_c, 0);
+        return { evento_id: it.evento_id, codigo: it.codigo, evento: it.nombre, fecha: it.fecha, moneda: it.moneda, acordado: cent(it.acordado_c), descuento: cent(it.descuento_c), descuento_motivo: it.descuento_motivo, extras: cent(it.extras_c || 0), extras_detalle: conc.filter((k) => k.evento_id === it.evento_id).map((k) => ({ concepto: k.concepto, monto: cent(k.monto_c), moneda: k.moneda })), neto: cent(neto), pagado: cent(pag), pendiente: cent(Math.max(0, neto - pag)),
           pagos: ps.map((p) => ({ id: p.id, codigo: p.codigo, fecha: p.fecha, monto: cent(p.monto_c), moneda: p.moneda, metodo: p.metodo, referencia: p.referencia, tipo: p.descripcion, confirmado: !!p.confirmado_en, discrepancia: p.discrepancia })) }; }));
     }
     if (method === 'POST' && accion && sub === 'confirmar') {

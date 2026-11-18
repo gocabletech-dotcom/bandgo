@@ -3,6 +3,31 @@
 // los bloqueos (empresa, país, banda o integrante), los choques de horario y los traslados entre países.
 import { json, err, txt, soloDigitos, fecha, aCentavos, moneda, emailOk, auditar, escHtml, enviarCorreo, correoBase, cfgCorreo } from './nucleo.js';
 
+// EE. UU.: estado (2 letras) y ZIP; en otros países la dirección va corrida
+export const ESTADOS_US = ['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','PR','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+export const esUS = (p) => ['us', 'usa', 'eeuu', 'ee uu', 'estados unidos', 'estados unidos de america', 'united states'].includes(String(p || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\./g, '').trim());
+function datosUS(d, actual = {}) {
+  const pais = d.pais !== undefined ? d.pais : actual.pais;
+  if (!esUS(pais)) return { estado_us: null, codigo_postal: null };
+  const est = d.estado_us !== undefined ? String(d.estado_us || '').toUpperCase().trim() : actual.estado_us;
+  const zip = d.codigo_postal !== undefined ? String(d.codigo_postal || '').trim() : actual.codigo_postal;
+  if (est && !ESTADOS_US.includes(est)) return { e: 'Escoja un estado de Estados Unidos válido' };
+  if (zip && !/^\d{5}(-\d{4})?$/.test(zip)) return { e: 'El ZIP debe tener 5 números (o 5-4)' };
+  return { estado_us: est || null, codigo_postal: zip || null };
+}
+// estudio de ensayo: el escogido, o uno nuevo que queda guardado al escribir un lugar que no existe
+async function resolverEstudio(db, E, d) {
+  if (Number(d.estudio_id)) {
+    const x = await db.prepare('SELECT * FROM estudios WHERE id = ? AND empresa_id = ?').bind(Number(d.estudio_id), E).first();
+    if (x) return { id: x.id, lugar: x.nombre, direccion: txt(d.direccion, 200) || x.direccion };
+  }
+  const lugar = txt(d.lugar, 120), direccion = txt(d.direccion, 200);
+  if (!lugar) return { id: null, lugar: null, direccion };
+  let x = await db.prepare('SELECT * FROM estudios WHERE empresa_id = ? AND lower(nombre) = lower(?)').bind(E, lugar).first();
+  if (!x) x = await db.prepare('INSERT INTO estudios (empresa_id, nombre, direccion) VALUES (?,?,?) ON CONFLICT(empresa_id, nombre) DO UPDATE SET activo = 1 RETURNING *').bind(E, lugar, direccion).first();
+  else if (!x.direccion && direccion) await db.prepare('UPDATE estudios SET direccion = ? WHERE id = ?').bind(direccion, x.id).run();
+  return { id: x.id, lugar: x.nombre, direccion: direccion || x.direccion };
+}
 export const ESTADOS_EVENTO = {
   cotizacion: 'Cotización', negociacion: 'Negociación', pendiente: 'Pendiente de confirmación', confirmado: 'Confirmado',
   anticipo: 'Anticipo recibido', pendiente_pago: 'Pendiente de pago', realizado: 'Evento realizado', en_cuadre: 'En proceso de cuadre',
@@ -57,7 +82,7 @@ const hayProblema = (r) => r.bloqueos.length || r.choques.length;
 function eventoPub(e, L) {
   const propio = e.booking_id === L.user.id;
   const montos = L.puede('eventos.ver_montos') || propio;
-  return { ...e, precio: montos ? cent(e.precio_c) : null, precio_c: undefined, montos, cubre: e.cubre ? JSON.parse(e.cubre) : {}, estado_nombre: ESTADOS_EVENTO[e.estado], puede_editar: L.puede('eventos.editar') && (propio || L.puede('eventos.editar_todos')) };
+  return { ...e, precio: montos ? cent(e.precio_c) : null, precio_c: undefined, montos, cubre: e.cubre ? JSON.parse(e.cubre) : {}, estado_nombre: ESTADOS_EVENTO[e.estado], flyer_url: e.flyer_r2 ? '/api/archivo/' + encodeURIComponent(e.flyer_r2) : null, puede_editar: L.puede('eventos.editar') && (propio || L.puede('eventos.editar_todos')) };
 }
 async function cargarEvento(db, E, id) {
   return db.prepare(`SELECT e.*, b.nombre AS banda, c.nombre AS cliente, ub.nombre AS booking, um.nombre AS manager FROM eventos e LEFT JOIN bandas b ON b.id = e.banda_id LEFT JOIN clientes c ON c.id = e.cliente_id
@@ -156,11 +181,14 @@ export async function rutasAgenda(L) {
     if ((method === 'POST' && !id) || (method === 'PUT' && id)) { const e0 = no('clientes.editar'); if (e0) return e0;
       if (!txt(d.nombre)) return err('Escriba el nombre del cliente');
       if (d.email && !emailOk(d.email)) return err('Correo no válido');
+      const us = datosUS(d, id ? (await db.prepare('SELECT pais, estado_us, codigo_postal FROM clientes WHERE id = ? AND empresa_id = ?').bind(id, E).first()) || {} : {}); if (us.e) return err(us.e);
       const v = [txt(d.nombre, 120), txt(d.nombre_comercial, 120), d.tipo === 'persona' ? 'persona' : 'empresa', soloDigitos(d.telefono) || null, soloDigitos(d.whatsapp) || null, d.email ? String(d.email).toLowerCase().trim() : null, txt(d.pais, 40), txt(d.ciudad, 60), txt(d.direccion, 200), txt(d.fiscal, 40), txt(d.contacto_nombre, 80), soloDigitos(d.contacto_telefono) || null, txt(d.notas, 1000)];
       if (method === 'POST') { const r = await db.prepare('INSERT INTO clientes (nombre, nombre_comercial, tipo, telefono, whatsapp, email, pais, ciudad, direccion, fiscal, contacto_nombre, contacto_telefono, notas, empresa_id, creado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id').bind(...v, E, user.id).first();
+        await db.prepare('UPDATE clientes SET estado_us = ?, codigo_postal = ?, lugar = ? WHERE id = ?').bind(us.estado_us, us.codigo_postal, txt(d.lugar, 120), r.id).run();
         await auditar(ctx, 'cliente_creado', 'cliente', r.id, d.nombre); return json({ ok: true, id: r.id }, 201); }
       const r = await db.prepare('UPDATE clientes SET nombre = ?, nombre_comercial = ?, tipo = ?, telefono = ?, whatsapp = ?, email = ?, pais = ?, ciudad = ?, direccion = ?, fiscal = ?, contacto_nombre = ?, contacto_telefono = ?, notas = ?, activo = ? WHERE id = ? AND empresa_id = ?').bind(...v, d.activo === false ? 0 : 1, id, E).run();
       if (!r.meta.changes) return err('No encontrado', 404);
+      await db.prepare('UPDATE clientes SET estado_us = ?, codigo_postal = ?, lugar = COALESCE(?, lugar) WHERE id = ?').bind(us.estado_us, us.codigo_postal, d.lugar !== undefined ? txt(d.lugar, 120) || '' : null, id).run();
       await auditar(ctx, 'cliente_editado', 'cliente', id, d.nombre); return json({ ok: true }); }
   }
 
@@ -192,11 +220,13 @@ export async function rutasAgenda(L) {
       const estado = ESTADOS_MANUALES.includes(d.estado) ? d.estado : 'cotizacion';
       const booking = Number(d.booking_id) || (L.rol === 'booking' ? user.id : null);
       if (L.rol === 'booking' && booking !== user.id) return err('Como booking, el evento queda a su nombre', 403);
+      const usE = datosUS(d); if (usE.e) return err(usE.e);
       const codigo = await siguienteCodigo(db, E, 'EVT');
       const r = await db.prepare(`INSERT INTO eventos (empresa_id, codigo, nombre, tipo, estado, fecha, zona_horaria, hora_llegada, hora_montaje, hora_soundcheck, hora_show, hora_fin, pais, ciudad, lugar, direccion, cliente_id, banda_id, booking_id, manager_id, precio_c, moneda, cubre, notas, creado_por)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`).bind(E, codigo, txt(d.nombre, 120), d.tipo === 'publico' ? 'publico' : 'privado', estado, d.fecha, txt(d.zona_horaria, 60) || empresa.zona_horaria,
         hora(d.hora_llegada), hora(d.hora_montaje), hora(d.hora_soundcheck), hora(d.hora_show), hora(d.hora_fin), txt(d.pais, 40), txt(d.ciudad, 60), txt(d.lugar, 120), txt(d.direccion, 200),
         Number(d.cliente_id) || null, Number(d.banda_id) || null, booking, Number(d.manager_id) || null, aCentavos(d.precio), moneda(d.moneda, empresa.moneda_base), JSON.stringify(limpiarCubre(d.cubre)), txt(d.notas, 2000), user.id).first();
+      await db.prepare('UPDATE eventos SET estado_us = ?, codigo_postal = ? WHERE id = ?').bind(usE.estado_us, usE.codigo_postal, r.id).run();
       if (equipoIni.length) await db.batch(equipoIni.map((m) => db.prepare('INSERT OR IGNORE INTO evento_asignaciones (evento_id, musico_id, funcion) VALUES (?,?,?)').bind(r.id, m.id, m.funcion || null)));
       await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(r.id, user.id, `Creado como «${ESTADOS_EVENTO[estado]}»${hayProblema(ag) ? ' · con excepción autorizada' : ''}`).run();
       await auditar(ctx, hayProblema(ag) ? 'evento_creado_excepcion' : 'evento_creado', 'evento', r.id, `${codigo} ${d.nombre} ${d.fecha}`);
@@ -221,14 +251,18 @@ export async function rutasAgenda(L) {
           if (hayProblema(ag) && !d.excepcion) return json({ error: 'Hay conflictos en esa fecha.', agenda: ag }, 409);
           if (hayProblema(ag) && !puede('eventos.excepcion')) return json({ error: 'Solo un manager puede autorizar la excepción.', agenda: ag }, 403);
         }
+        const usE = datosUS(d, e); if (usE.e) return err(usE.e);
         const cambios = [];
-        for (const k of ['nombre', 'fecha', 'estado', 'hora_show', 'lugar', 'ciudad', 'pais']) if (d[k] !== undefined && String(d[k] ?? '') !== String(e[k] ?? '')) cambios.push(`${k}: ${k === 'estado' ? ESTADOS_EVENTO[e[k]] + ' → ' + ESTADOS_EVENTO[d[k]] : (e[k] ?? '—') + ' → ' + (d[k] || '—')}`);
+        for (const k of ['nombre', 'fecha', 'estado', 'hora_show', 'lugar', 'ciudad', 'pais', 'direccion', 'estado_us', 'codigo_postal']) if (d[k] !== undefined && String(d[k] ?? '') !== String(e[k] ?? '')) cambios.push(`${k}: ${k === 'estado' ? ESTADOS_EVENTO[e[k]] + ' → ' + ESTADOS_EVENTO[d[k]] : (e[k] ?? '—') + ' → ' + (d[k] || '—')}`);
         if (d.precio !== undefined && aCentavos(d.precio) !== e.precio_c) { if (!pub.montos) return err('No puede cambiar el precio', 403); cambios.push(`precio: ${cent(e.precio_c) ?? '—'} → ${d.precio || '—'}`); }
         await db.prepare(`UPDATE eventos SET nombre = ?, tipo = ?, estado = ?, fecha = ?, zona_horaria = ?, hora_llegada = ?, hora_montaje = ?, hora_soundcheck = ?, hora_show = ?, hora_fin = ?, pais = ?, ciudad = ?, lugar = ?, direccion = ?, cliente_id = ?, banda_id = ?, booking_id = ?, manager_id = ?, precio_c = ?, moneda = ?, cubre = ?, notas = ?, actualizado = datetime('now') WHERE id = ?`)
           .bind(n('nombre', (x) => txt(x, 120)), n('tipo', (x) => (x === 'publico' ? 'publico' : 'privado')), d.estado || e.estado, nuevo.fecha, n('zona_horaria', (x) => txt(x, 60)), n('hora_llegada', hora), n('hora_montaje', hora), n('hora_soundcheck', hora), n('hora_show', hora), n('hora_fin', hora),
             nuevo.pais, n('ciudad', (x) => txt(x, 60)), n('lugar', (x) => txt(x, 120)), n('direccion', (x) => txt(x, 200)), n('cliente_id', (x) => Number(x) || null), nuevo.banda_id,
             L.rol === 'booking' ? e.booking_id : n('booking_id', (x) => Number(x) || null), n('manager_id', (x) => Number(x) || null), pub.montos && d.precio !== undefined ? aCentavos(d.precio) : e.precio_c, pub.montos && d.moneda ? moneda(d.moneda) : e.moneda,
             d.cubre !== undefined ? JSON.stringify(limpiarCubre(d.cubre)) : e.cubre, n('notas', (x) => txt(x, 2000)), id).run();
+        await db.prepare('UPDATE eventos SET estado_us = ?, codigo_postal = ? WHERE id = ?').bind(usE.estado_us, usE.codigo_postal, id).run();
+        if (d.flyer !== undefined) { const fl = d.flyer ? (await db.prepare("SELECT clave FROM archivos WHERE clave = ? AND empresa_id = ? AND tipo = 'flyer'").bind(d.flyer, E).first())?.clave : null; if (d.flyer && !fl) return err('El flyer no es válido');
+          await db.prepare('UPDATE eventos SET flyer_r2 = ? WHERE id = ?').bind(fl, id).run(); cambios.push(fl ? 'flyer nuevo' : 'quitó el flyer'); }
         if (cambios.length) await db.prepare('INSERT INTO evento_historial (evento_id, usuario_id, cambio) VALUES (?,?,?)').bind(id, user.id, cambios.join(' · ').slice(0, 500)).run();
         await auditar(ctx, 'evento_editado', 'evento', id, cambios.join(' · ').slice(0, 400) || 'datos');
         return json({ ok: true });
@@ -255,8 +289,8 @@ export async function rutasAgenda(L) {
         const banda = e.banda_id ? await db.prepare('SELECT nombre, logo_r2 FROM bandas WHERE id = ?').bind(e.banda_id).first() : null;
         const ver = ((await db.prepare('SELECT MAX(version) v FROM contratos WHERE evento_id = ?').bind(id).first()).v || 0) + 1;
         const mon = moneda(d.moneda, e.moneda);
-        const datos = { evento: { codigo: e.codigo, nombre: e.nombre, tipo: e.tipo, fecha: e.fecha, lugar: e.lugar, direccion: e.direccion, ciudad: e.ciudad, pais: e.pais, hora_llegada: e.hora_llegada, hora_soundcheck: e.hora_soundcheck, hora_show: e.hora_show, hora_fin: e.hora_fin, cubre: e.cubre ? JSON.parse(e.cubre) : {} },
-          cliente: { nombre: cli.nombre, nombre_comercial: cli.nombre_comercial, fiscal: cli.fiscal, direccion: cli.direccion, ciudad: cli.ciudad, pais: cli.pais, telefono: cli.telefono, email: cli.email, contacto: cli.contacto_nombre },
+        const datos = { evento: { codigo: e.codigo, nombre: e.nombre, tipo: e.tipo, fecha: e.fecha, lugar: e.lugar, direccion: e.direccion, ciudad: e.ciudad, pais: e.pais, estado_us: e.estado_us, codigo_postal: e.codigo_postal, hora_llegada: e.hora_llegada, hora_soundcheck: e.hora_soundcheck, hora_show: e.hora_show, hora_fin: e.hora_fin, cubre: e.cubre ? JSON.parse(e.cubre) : {} },
+          cliente: { nombre: cli.nombre, nombre_comercial: cli.nombre_comercial, fiscal: cli.fiscal, direccion: cli.direccion, ciudad: cli.ciudad, pais: cli.pais, estado_us: cli.estado_us, codigo_postal: cli.codigo_postal, telefono: cli.telefono, email: cli.email, contacto: cli.contacto_nombre },
           empresa: { nombre: empresa.nombre, telefono: empresa.telefono, email: empresa.email, pais: empresa.pais, logo_r2: empresa.logo_r2 }, banda: banda ? { nombre: banda.nombre, logo_r2: banda.logo_r2 } : null };
         await db.batch([
           db.prepare("UPDATE contratos SET estado = 'anulado' WHERE evento_id = ? AND estado IN ('borrador','enviado')").bind(id),
@@ -270,6 +304,18 @@ export async function rutasAgenda(L) {
       }
     }
   }
+  if (mod === 'estudios') {
+    if (method === 'GET') { const e0 = no('ensayos.ver'); if (e0) return e0;
+      return json((await db.prepare('SELECT s.*, (SELECT COUNT(*) FROM ensayos x WHERE x.estudio_id = s.id) AS ensayos FROM estudios s WHERE s.empresa_id = ? AND s.activo = 1 ORDER BY s.nombre').bind(E).all()).results); }
+    const e0 = no('ensayos.editar'); if (e0) return e0;
+    if (method === 'POST' && !id) { const nombre = txt(d.nombre, 120); if (!nombre) return err('Escriba el nombre del estudio');
+      if (await db.prepare('SELECT 1 FROM estudios WHERE empresa_id = ? AND lower(nombre) = lower(?) AND activo = 1').bind(E, nombre).first()) return err('Ya existe un estudio con ese nombre');
+      const r = await db.prepare('INSERT INTO estudios (empresa_id, nombre, direccion, telefono, notas) VALUES (?,?,?,?,?) ON CONFLICT(empresa_id, nombre) DO UPDATE SET activo = 1, direccion = excluded.direccion RETURNING id').bind(E, nombre, txt(d.direccion, 200), soloDigitos(d.telefono) || null, txt(d.notas, 300)).first();
+      return json({ ok: true, id: r.id }, 201); }
+    if (method === 'PUT' && id) { const x = await db.prepare('SELECT * FROM estudios WHERE id = ? AND empresa_id = ?').bind(id, E).first(); if (!x) return err('No encontrado', 404);
+      await db.prepare('UPDATE estudios SET nombre = ?, direccion = ?, telefono = ?, notas = ?, activo = ? WHERE id = ?').bind(txt(d.nombre, 120) || x.nombre, d.direccion !== undefined ? txt(d.direccion, 200) : x.direccion, d.telefono !== undefined ? soloDigitos(d.telefono) || null : x.telefono, d.notas !== undefined ? txt(d.notas, 300) : x.notas, d.activo === false ? 0 : 1, id).run();
+      return json({ ok: true }); }
+  }
   if (mod === 'contratos' && id) {
     const c = await db.prepare('SELECT c.*, e.booking_id, u.nombre AS por FROM contratos c JOIN eventos e ON e.id = c.evento_id LEFT JOIN usuarios u ON u.id = c.creado_por WHERE c.id = ? AND c.empresa_id = ?').bind(id, E).first();
     if (!c) return err('No encontrado', 404);
@@ -279,7 +325,8 @@ export async function rutasAgenda(L) {
       const datos = JSON.parse(c.datos);
       const url = (k) => (k ? '/api/archivo/' + encodeURIComponent(k) : null);
       return json({ id: c.id, evento_id: c.evento_id, version: c.version, estado: c.estado, precio: cent(c.precio_c), moneda: c.moneda, anticipo: cent(c.anticipo_c), anticipo_vence: c.anticipo_vence, saldo_vence: c.saldo_vence, condiciones: c.condiciones, creado: c.creado, por: c.por,
-        datos: { ...datos, empresa: { ...datos.empresa, logo_url: url(datos.empresa.logo_r2) }, banda: datos.banda ? { ...datos.banda, logo_url: url(datos.banda.logo_r2) } : null }, firmado_url: url(c.archivo_firmado_r2) });
+        datos: { ...datos, empresa: { ...datos.empresa, logo_url: url(datos.empresa.logo_r2) }, banda: datos.banda ? { ...datos.banda, logo_url: url(datos.banda.logo_r2) } : null }, firmado_url: url(c.archivo_firmado_r2),
+        firma: c.firma_en ? { nombre: c.firma_nombre, en: c.firma_en, url: url(c.firma_r2), ip: c.firma_ip, huella: c.firma_huella } : null });
     }
     if (method === 'PUT' && accion === 'estado') {
       if (!puede('contratos.editar') || !(propio || puede('eventos.editar_todos'))) return err('No puede cambiar este contrato', 403);
@@ -320,14 +367,15 @@ export async function rutasAgenda(L) {
       const validos = new Set((await db.prepare('SELECT id FROM musicos WHERE empresa_id = ? AND activo = 1').bind(E).all()).results.map((x) => x.id));
       let citados = ids(d.citados).filter((x) => validos.has(x));
       if (!d.citados && d.banda_id) citados = (await integrantesDeBanda(db, Number(d.banda_id))).map((m) => m.id);
+      const est = await resolverEstudio(db, E, d);
       const semanas = Math.min(26, Math.max(1, Number(d.repetir_semanas) || 1));
       const serie = semanas > 1 ? crypto.randomUUID() : null;
       const rep = (Array.isArray(d.repertorio) ? d.repertorio : []).filter((x) => txt(x && x.titulo)).slice(0, 60);
       const creados = [], advertencias = [];
       for (let i = 0; i < semanas; i++) {
         const dia = sumarDias(d.fecha, i * 7);
-        const r = await db.prepare('INSERT INTO ensayos (empresa_id, banda_id, titulo, fecha, hora_inicio, hora_fin, lugar, direccion, notas, serie, creado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id')
-          .bind(E, Number(d.banda_id) || null, txt(d.titulo, 120), dia, hora(d.hora_inicio), hora(d.hora_fin), txt(d.lugar, 120), txt(d.direccion, 200), txt(d.notas, 2000), serie, user.id).first();
+        const r = await db.prepare('INSERT INTO ensayos (empresa_id, banda_id, titulo, fecha, hora_inicio, hora_fin, lugar, direccion, notas, serie, creado_por, estudio_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id')
+          .bind(E, Number(d.banda_id) || null, txt(d.titulo, 120), dia, hora(d.hora_inicio), hora(d.hora_fin), est.lugar, est.direccion, txt(d.notas, 2000), serie, user.id, est.id).first();
         const st = citados.map((m) => db.prepare('INSERT INTO ensayo_citados (ensayo_id, musico_id) VALUES (?,?)').bind(r.id, m));
         rep.forEach((x, k) => st.push(db.prepare('INSERT INTO ensayo_repertorio (ensayo_id, orden, titulo, detalle, enlace) VALUES (?,?,?,?,?)').bind(r.id, k, txt(x.titulo, 120), txt(x.detalle, 200), /^https?:\/\//.test(String(x.enlace || '')) ? String(x.enlace).slice(0, 500) : null)));
         if (st.length) await db.batch(st);
@@ -346,6 +394,7 @@ export async function rutasAgenda(L) {
         const n = (k, f) => (d[k] !== undefined ? f(d[k]) : s[k]);
         const cambioClave = (d.fecha && d.fecha !== s.fecha) || (d.hora_inicio !== undefined && hora(d.hora_inicio) !== s.hora_inicio) || (d.lugar !== undefined && txt(d.lugar, 120) !== s.lugar);
         await db.prepare('UPDATE ensayos SET titulo = ?, fecha = ?, hora_inicio = ?, hora_fin = ?, lugar = ?, direccion = ?, notas = ? WHERE id = ?').bind(n('titulo', (x) => txt(x, 120)) || s.titulo, n('fecha', fecha), n('hora_inicio', hora), n('hora_fin', hora), n('lugar', (x) => txt(x, 120)), n('direccion', (x) => txt(x, 200)), n('notas', (x) => txt(x, 2000)), id).run();
+        if (d.lugar !== undefined || d.estudio_id !== undefined) { const es2 = await resolverEstudio(db, E, d); await db.prepare('UPDATE ensayos SET estudio_id = ?, lugar = COALESCE(?, lugar), direccion = COALESCE(?, direccion) WHERE id = ?').bind(es2.id, es2.lugar, es2.direccion, id).run(); }
         if (Array.isArray(d.citados)) {
           const validos = new Set((await db.prepare('SELECT id FROM musicos WHERE empresa_id = ? AND activo = 1').bind(E).all()).results.map((x) => x.id));
           const quiere = new Set(ids(d.citados).filter((x) => validos.has(x)));

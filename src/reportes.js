@@ -179,7 +179,7 @@ export async function rutasReportes(L) {
       const its = (await db.prepare(`SELECT n.*, m.nombre AS musico, e.codigo, e.nombre AS evento, e.fecha,
           (SELECT COALESCE(SUM(x.monto_c),0) FROM movimientos x WHERE x.evento_id = n.evento_id AND x.musico_id = n.musico_id AND x.tipo = 'nomina' AND x.anulado = 0 AND x.moneda = n.moneda) AS pagado_c
         FROM nomina n JOIN musicos m ON m.id = n.musico_id JOIN eventos e ON e.id = n.evento_id WHERE ${f.w} ORDER BY e.fecha, m.nombre`).bind(...f.b).all()).results;
-      filas = its.map((n) => { const neto = n.acordado_c - (n.descuento_c || 0); return { grupo: n.musico, evento: `${n.codigo} · ${n.evento}`, evento_id: n.evento_id, fecha: n.fecha, moneda: n.moneda, acordado: neto, pagado: n.pagado_c, pendiente: Math.max(0, neto - n.pagado_c), estado: n.pagado_c <= 0 ? 'Sin pago' : n.pagado_c < neto ? 'Parcial' : 'Pagado' }; })
+      filas = its.map((n) => { const neto = n.acordado_c - (n.descuento_c || 0) + (n.extras_c || 0); return { grupo: n.musico, evento: `${n.codigo} · ${n.evento}`, evento_id: n.evento_id, fecha: n.fecha, moneda: n.moneda, acordado: neto, pagado: n.pagado_c, pendiente: Math.max(0, neto - n.pagado_c), estado: n.pagado_c <= 0 ? 'Sin pago' : n.pagado_c < neto ? 'Parcial' : 'Pagado' }; })
         .filter((x) => x.pendiente > 0);
       columnas = [X('grupo', 'Músico'), X('evento', 'Evento'), X('fecha', 'Fecha'), X('moneda', 'Moneda'), D('acordado', 'Acordado'), D('pagado', 'Pagado'), D('pendiente', 'Pendiente'), X('estado', 'Estado')];
     } else {

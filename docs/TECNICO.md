@@ -15,9 +15,10 @@
 | `src/reportes.js` | Fase 6: 7 reportes con filtros, totales por moneda, consolidado con `tasaDe`, exportación .xlsx y presupuesto del evento. |
 | `src/xlsx.js` | Escribe .xlsx sin librerías (ZIP sin compresión + XML de hoja). |
 | `src/comunicacion.js` | Fase 7: comunicados (destinatarios congelados, lectura y «Enterado»), chat (acceso calculado por banda, evento, gira y miembros; mensajes, lecturas, moderación), `accesoAdjunto`. |
+| `src/extras.js` | v0.8: `roles-info`, funciones con pago (`funciones_pago`), gastos guardados, acceso de clientes (invitar/quitar) y el portal del cliente (`cliente/…`: eventos, datos editables, flyer, contrato y firma con huella). `accesoArchivoCliente`. |
 | `src/plataforma.js` | Superadministrador: empresas, planes, ajustes, errores. |
-| `migrations/` | `0001_nucleo.sql`, `0002_personal.sql`, `0003_agenda.sql`, `0004_finanzas.sql`, `0005_viajes.sql`, `0006_rider.sql`, `0007_reportes.sql`, `0008_comunicacion.sql`. Nunca se edita una migración publicada: se agrega otra. |
-| `public/app/` | La app: `app.js` (rutas `#/…`, oficina, portal, plataforma), `agenda.js` (pantallas de la Fase 2), `finanzas.js` (Fase 3), `viajes.js` (Fase 4), `rider.js` (Fase 5: editor SVG del plano), `reportes.js` (Fase 6), `mensajes.js` (Fase 7), `app.css` (colores del logo). |
+| `migrations/` | `0001_nucleo.sql`, `0002_personal.sql`, `0003_agenda.sql`, `0004_finanzas.sql`, `0005_viajes.sql`, `0006_rider.sql`, `0007_reportes.sql`, `0008_comunicacion.sql`, `0009_funciones_nomina_clientes.sql`. Nunca se edita una migración publicada: se agrega otra. |
+| `public/app/` | La app: `app.js` (rutas `#/…`, oficina, portal, plataforma), `agenda.js` (pantallas de la Fase 2), `finanzas.js` (Fase 3), `viajes.js` (Fase 4), `rider.js` (Fase 5: editor SVG del plano), `reportes.js` (Fase 6), `mensajes.js` (Fase 7), `extras.js` (roles desplegables, funciones y gastos guardados, «Mi perfil de músico», portal del cliente), `app.css` (colores del logo). |
 | `tools/pruebas.mjs` | Pruebas de punta a punta con una base local temporal (aislamiento, permisos, cifrado, portal, plataforma). |
 
 ## Reglas
@@ -33,6 +34,9 @@
 - Pasaportes, visas, cuentas bancarias y claves de terceros se guardan **cifrados**. Sin `BANDGO_LLAVE` no se guardan.
 - Archivos (logos, fotos, documentos) en R2 **privado**; se sirven por `/api/archivo/…` revisando empresa y permiso.
 - Cambios (POST/PUT/DELETE) exigen el encabezado `x-requested-with: bg`.
+- Nómina: neto = acordado − descuento + `extras_c` (suma de los renglones del músico en `nomina_conceptos`). Los renglones «General» se pagan como gasto del evento (`movimientos.nomina_concepto_id`) y el cuadre no los cuenta dos veces. `armarNomina` es idempotente: funciones fijas del músico → renglón; funciones % y las de usuarios de oficina → `comisiones`.
+- Direcciones: `estado_us` y `codigo_postal` solo se guardan si el país es Estados Unidos (estado de 2 letras, ZIP de 5 o 5-4 dígitos).
+- Cliente (rol `cliente`): solo ve los eventos de su ficha (`clientes.usuario_id`); no puede cambiar nada si el evento está en cuadre, liquidado o cancelado; cada cambio queda en el historial. Firmar deja el contrato «firmado» y el evento «confirmado».
 - **Nunca se prueba con datos de producción.**
 
 ## Probar en su computadora

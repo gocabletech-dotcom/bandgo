@@ -65,7 +65,7 @@ function elegirArchivo(tipo) {
       try {
         let datos;
         if (f.type === 'application/pdf') { if (f.size > 4e6) throw new Error('El PDF es muy grande (máximo 4 MB)'); datos = await leerComo(f); }
-        else datos = await reducir(f, tipo === 'documento' || tipo === 'adjunto' ? 1800 : tipo === 'foto_musico' ? 600 : 700, tipo.startsWith('logo') && f.type === 'image/png' ? 'image/png' : 'image/jpeg');
+        else datos = await reducir(f, tipo === 'documento' || tipo === 'adjunto' ? 1800 : tipo === 'flyer' ? 1400 : tipo === 'foto_musico' ? 600 : 700, tipo.startsWith('logo') && f.type === 'image/png' ? 'image/png' : 'image/jpeg');
         ok(await api('archivos', { method: 'POST', body: { tipo, datos } }));
       } catch (e) { falla(e); ok(null); }
     };
@@ -93,6 +93,7 @@ async function pintar() {
   }
   if (r0 === 'login') { location.hash = '#/'; return; }
   if (ME.plataforma) return plataforma(r0 || 'resumen', r1);
+  if (ME.cliente) return clientePortal(r0 || 'inicio', r1, r2);
   if (ME.portal) return portal(r0 || 'inicio', r1, r2);
   return oficina(r0 || 'inicio', r1, r2, r3);
 }
@@ -169,16 +170,17 @@ const MENU = [
   { g: 'Principal', i: [['inicio', 'Resumen general', 'home'], ['calendario', 'Calendario', 'cal', 0, 'eventos.ver'], ['ensayos', 'Ensayos', 'music', 0, 'ensayos.ver']] },
   { g: 'Booking', i: [['eventos', 'Conciertos y eventos', 'star', 0, 'eventos.ver'], ['clientes', 'Clientes', 'brief', 0, 'clientes.ver'], ['comisiones', 'Comisiones', 'pct', 0, 'comisiones.ver']] },
   { g: 'Equipo', i: [['bandas', 'Bandas', 'band', 0, 'bandas.ver'], ['integrantes', 'Integrantes', 'users', 0, 'musicos.ver']] },
-  { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales']] },
+  { g: 'Finanzas', i: [['finanzas', 'Finanzas y caja', 'money', 0, 'finanzas.ver'], ['nominas', 'Nóminas', 'wallet', 0, 'nomina.ver'], ['cuadres', 'Cuadres', 'check', 0, 'finanzas.ver'], ['gastos', 'Gastos generales', 'receipt', 0, 'gastos.generales'], ['funciones', 'Funciones y gastos guardados', 'pct', 0, 'nomina.ver']] },
   { g: 'Operación', i: [['viajes', 'Giras y viajes', 'plane', 0, 'viajes.ver'], ['itinerarios', 'Itinerarios', 'map', 0, 'viajes.ver'], ['rider', 'Rider técnico', 'rider', 0, 'rider.ver']] },
   { g: 'Comunicación', i: [['comunicados', 'Comunicados', 'mega', 0, 'comunicados.ver'], ['chat', 'Chat', 'chat', 0, 'chat.usar']] },
   { g: 'Análisis', i: [['reportes', 'Reportes', 'chart', 0, 'reportes.ver'], ['auditoria', 'Bitácora', 'list', 0, 'auditoria.ver']] },
+  { g: 'Mi perfil de músico', i: [['mi-musico', 'Mis pagos, agenda e itinerario', 'music', 0, '@musico']] },
   { g: 'Configuración', i: [['empresa', 'Empresa', 'gear', 0, 'empresa.ver'], ['usuarios', 'Usuarios y permisos', 'shield', 0, 'usuarios.ver'], ['cuenta', 'Mi cuenta', 'key']] },
 ];
-const TITULOS = { comunicados: 'Comunicados', chat: 'Chat', reportes: 'Reportes', rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
+const TITULOS = { funciones: 'Funciones y gastos guardados', 'mi-musico': 'Mi perfil de músico', comunicados: 'Comunicados', chat: 'Chat', reportes: 'Reportes', rider: 'Rider técnico', viajes: 'Giras y viajes', itinerarios: 'Itinerarios', finanzas: 'Finanzas y caja', nominas: 'Nóminas', cuadres: 'Cuadres', gastos: 'Gastos generales', comisiones: 'Comisiones', recibo: 'Recibo', calendario: 'Calendario', ensayos: 'Ensayos', eventos: 'Conciertos y eventos', clientes: 'Clientes', contrato: 'Contrato', inicio: 'Resumen general', bandas: 'Bandas', integrantes: 'Integrantes', empresa: 'Empresa', usuarios: 'Usuarios y permisos', cuenta: 'Mi cuenta', auditoria: 'Bitácora' };
 function marco(seccion, titulo) {
   const E = ME.empresa;
-  const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || puede(x[4])); if (!items.length) return '';
+  const nav = MENU.map((g) => { const items = g.i.filter((x) => !x[4] || (x[4] === '@musico' ? !!ME.mi_musico : puede(x[4]))); if (!items.length) return '';
     return `<div class="lat-g">${esc(g.g)}</div>` + items.map(([k, t, ic, fase]) => fase
       ? `<span class="lat-i fut" title="Llega en la fase ${fase}">${ico(ic)}<span>${esc(t)}</span><span class="fase">F${fase}</span></span>`
       : `<a class="lat-i${k === seccion ? ' act' : ''}" href="#/${k}">${ico(ic)}<span>${esc(t)}</span></a>`).join(''); }).join('');
@@ -198,7 +200,7 @@ function marco(seccion, titulo) {
   return $('#c');
 }
 async function oficina(sec, a, b, x) {
-  const V = { comunicados: vComunicados, chat: vChat, reportes: vReportes, rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
+  const V = { funciones: vFunciones, 'mi-musico': vMiMusico, comunicados: vComunicados, chat: vChat, reportes: vReportes, rider: vRider, viajes: vViajes, itinerarios: vItinerarios, finanzas: vFinanzas, nominas: vNominas, cuadres: vCuadres, gastos: vGastos, comisiones: vComisiones, recibo: vRecibo, calendario: vCalendario, ensayos: vEnsayos, eventos: vEventos, clientes: vClientes, contrato: vContrato, inicio: vInicio, bandas: vBandas, integrantes: vIntegrantes, empresa: vEmpresa, usuarios: vUsuarios, cuenta: vCuenta, auditoria: vAuditoria }[sec];
   if (!V) { location.hash = '#/'; return; }
   const c = marco(sec, TITULOS[sec]);
   try { await V(c, a, b, x); } catch (e) { c.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
@@ -345,13 +347,19 @@ async function fichaMusico(c, id, pest) {
   $$('.pestanas button').forEach((bt) => (bt.onclick = () => { location.hash = `#/integrantes/${id}/${bt.dataset.t}`; }));
   if ($('#inv')) $('#inv').onclick = (ev) => trabajando(ev.target, async () => {
     const r = await api(`musicos/${id}/invitar`, { method: 'POST' });
+    if (r.enlazado) { toast('Ese correo ya es de la oficina: quedó enlazado sin cambiarle el acceso'); return fichaMusico(c, id, pest); }
     modal('Acceso al portal', `${r.enviado ? `<div class="aviso ok">Le mandamos la invitación a ${esc(m.email)}.</div>` : '<div class="aviso adv">Los correos no están activados en la plataforma. Mándele este enlace por WhatsApp:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: `${m.whatsapp ? `<a class="btn" target="_blank" rel="noopener" href="https://wa.me/${esc(m.whatsapp)}?text=${encodeURIComponent('Hola ' + m.nombre.split(' ')[0] + ', este es tu acceso a BandGo: ' + r.enlace)}">Enviar por WhatsApp</a>` : ''}<button class="btn prim" data-cerrar>Listo</button>` });
   });
   const pc = $('#pc');
   if (act === 'datos') {
     const f = (t, v) => `<div><div class="mut peq">${t}</div><div style="font-weight:600;margin-top:2px">${esc(v || '—')}</div></div>`;
     pc.innerHTML = `<div class="card" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px">${f('Correo', m.email)}${f('Teléfono', m.telefono)}${f('WhatsApp', m.whatsapp)}${m.direccion !== undefined ? f('Nacimiento', m.nacimiento ? fechaTxt(m.nacimiento) : '') + f('País de residencia', m.pais_residencia) + f('Dirección', m.direccion) + f('Emergencia', [m.emergencia_nombre, m.emergencia_telefono].filter(Boolean).join(' · ')) : ''}${f('Tarifa base', m.tarifa != null ? dinero(m.tarifa, m.tarifa_moneda) : '')}${f('Tipo', { musico: 'Músico', sonidista: 'Sonidista', tecnico: 'Técnico / crew' }[m.tipo])}</div>
-      ${m.notas ? `<div class="card"><h2>Notas</h2><p style="white-space:pre-line;margin:8px 0 0">${esc(m.notas)}</p></div>` : ''}`;
+      ${m.notas ? `<div class="card"><h2>Notas</h2><p style="white-space:pre-line;margin:8px 0 0">${esc(m.notas)}</p></div>` : ''}<div id="funcs"></div>
+      ${puede('usuarios.editar') && !m.portal ? '<div class="card" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span><b>¿Trabaja también en la oficina?</b><br><span class="peq mut">Si es manager, booking o admin con otro correo, enlácelo a su usuario: sigue con su acceso de oficina y además ve sus pagos de músico.</span></span><button class="btn chico" id="enl">Enlazar a un usuario</button></div>' : ''}`;
+    seccionFunciones($('#funcs'), m);
+    if ($('#enl')) $('#enl').onclick = async () => { const U = (await api('usuarios')).usuarios.filter((u) => u.activo && ['dueno', 'admin', 'manager', 'booking'].includes(u.rol));
+      const md = modal('Enlazar a un usuario de la oficina', `<label class="campo">Usuario<select name="u">${U.map((u) => `<option value="${u.id}">${esc(u.nombre)} · ${esc(u.rol_nombre)} · ${esc(u.email)}</option>`).join('')}</select></label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="ok">Enlazar</button>' });
+      $('#ok', md.el).onclick = (ev) => trabajando(ev.target, async () => { await api(`musicos/${id}/enlazar`, { method: 'POST', body: { usuario_id: $('[name=u]', md.el).value } }); md.cerrar(); toast('Enlazado'); fichaMusico(c, id, 'datos'); }); };
   }
   if (act === 'documentos') pintarDocs(pc, m.documentos, puede('documentos.editar'), (d, docId) => api(`musicos/${id}/documentos${docId ? '/' + docId : ''}`, { method: docId ? 'PUT' : 'POST', body: d }), (docId) => api(`musicos/${id}/documentos/${docId}`, { method: 'DELETE' }), () => fichaMusico(c, id, 'documentos'));
   if (act === 'pago') pintarPago(pc, m.cuenta_pago, puede('pagos.editar'), (d) => api(`musicos/${id}/cuenta-pago`, { method: 'PUT', body: d }), () => fichaMusico(c, id, 'pago'));
@@ -408,24 +416,28 @@ async function vEmpresa(c) {
 }
 async function vUsuarios(c) {
   const [U, P] = await Promise.all([api('usuarios'), api('permisos')]);
-  const oficina = U.usuarios.filter((u) => !['musico', 'sonidista'].includes(u.rol)), portal = U.usuarios.filter((u) => ['musico', 'sonidista'].includes(u.rol));
-  const fila = (u) => `<tr><td><b>${esc(u.nombre)}</b><br><span class="mut peq">${esc(u.email)}</span></td><td><span class="tag${u.rol === 'dueno' ? '' : ' gris'}">${esc(u.rol_nombre)}</span></td><td>${u.dos_pasos ? '<span class="est ok">Dos pasos</span>' : '<span class="est gr">Solo contraseña</span>'}</td><td class="mono peq">${u.visto_en ? esc(fechaTxt(u.visto_en)) : '—'}</td>
+  const oficina = U.usuarios.filter((u) => !['musico', 'sonidista', 'cliente'].includes(u.rol)), portal = U.usuarios.filter((u) => ['musico', 'sonidista'].includes(u.rol)), clientes = U.usuarios.filter((u) => u.rol === 'cliente');
+  const fila = (u) => `<tr><td><b>${esc(u.nombre)}</b><br><span class="mut peq">${esc(u.email)}</span></td><td style="position:relative">${rolChip(u.rol, u.rol_nombre)}</td><td>${u.dos_pasos ? '<span class="est ok">Dos pasos</span>' : '<span class="est gr">Solo contraseña</span>'}</td><td class="mono peq">${u.visto_en ? esc(fechaTxt(u.visto_en)) : '—'}</td>
     <td>${u.activo ? '<span class="est ok">Activo</span>' : '<span class="est mal">Sin acceso</span>'}</td><td>${puede('usuarios.editar') && u.rol !== 'dueno' && u.id !== ME.usuario.id ? `<button class="btn chico" data-u="${u.id}">Cambiar</button>` : ''}</td></tr>`;
   c.innerHTML = `<div class="cab"><h1>Usuarios y permisos</h1><div class="acc">${puede('usuarios.invitar') ? '<button class="btn prim" id="inv">+ Invitar a la oficina</button>' : ''}</div></div>
     <div class="card sin"><div class="card-h"><h2>Oficina</h2></div><div class="desliza"><table class="tabla"><thead><tr><th>Persona</th><th>Rol</th><th>Seguridad</th><th>Último uso</th><th>Estado</th><th></th></tr></thead><tbody>${oficina.map(fila).join('')}</tbody></table></div></div>
     <div class="card sin"><div class="card-h"><h2>Portal de músicos y sonidistas · ${portal.length}</h2><span class="mut peq">El acceso se da desde la ficha de cada integrante</span></div>${portal.length ? `<div class="desliza"><table class="tabla"><tbody>${portal.map(fila).join('')}</tbody></table></div>` : '<div class="vacio">Nadie tiene acceso al portal todavía.</div>'}</div>
     ${U.invitaciones.length ? `<div class="card sin"><div class="card-h"><h2>Invitaciones pendientes</h2></div><div class="desliza"><table class="tabla"><tbody>${U.invitaciones.map((i) => `<tr><td>${esc(i.nombre || '')} <span class="mut">${esc(i.email)}</span></td><td><span class="tag gris">${esc(i.rol_nombre)}</span></td><td class="mut peq">Vence ${esc(fechaTxt(i.expira))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${clientes.length ? `<div class="card sin"><div class="card-h"><h2>Portal de clientes · ${clientes.length}</h2><span class="mut peq">El acceso se da desde la ficha de cada cliente</span></div><div class="desliza"><table class="tabla"><tbody>${clientes.map(fila).join('')}</tbody></table></div></div>` : ''}
+    <div class="card" style="display:flex;flex-direction:column;gap:8px"><h2 style="margin:0">Roles</h2><p class="mut peq" style="margin:0">Toque un rol para ver qué puede hacer.</p><div style="display:flex;gap:8px;flex-wrap:wrap;position:relative">${Object.entries(U.roles).filter(([k]) => k !== 'promotor').map(([k, t]) => `<span style="position:relative">${rolChip(k, t)}</span>`).join('')}</div></div>
     <div class="card sin"><div class="card-h"><div><h2>Qué puede hacer cada rol</h2><div class="mut peq">${puede('permisos.editar') ? 'Marque o desmarque. El dueño siempre puede todo.' : 'Solo el dueño puede cambiar esto.'}</div></div></div>
       <div class="desliza"><table class="tabla"><thead><tr><th>Permiso</th>${Object.values(P.roles).map((r) => `<th style="text-align:center">${esc(r)}</th>`).join('')}</tr></thead><tbody>${Object.entries(P.catalogo).map(([k, t]) => `<tr><td>${esc(t)}<br><span class="mono peq mut">${esc(k)}</span></td>${Object.keys(P.roles).map((r) => `<td style="text-align:center"><input type="checkbox" data-r="${r}" data-p="${k}" ${P.permisos[r].includes(k) ? 'checked' : ''} ${puede('permisos.editar') ? '' : 'disabled'} aria-label="${esc(P.roles[r] + ': ' + t)}"></td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   $$('input[data-r]').forEach((i) => (i.onchange = async () => { try { await api('permisos', { method: 'PUT', body: { rol: i.dataset.r, permiso: i.dataset.p, permitido: i.checked } }); toast('Permiso guardado'); } catch (e) { i.checked = !i.checked; falla(e); } }));
   if ($('#inv')) $('#inv').onclick = () => {
     const md = modal('Invitar a la oficina', `<label class="campo">Nombre<input name="nombre"></label><label class="campo">Correo<input type="email" name="email" required></label>
-      <label class="campo">Rol<select name="rol">${['admin', 'manager', 'booking'].filter((r) => r !== 'admin' || ME.rol === 'dueno').map((r) => `<option value="${r}">${esc(U.roles[r])}</option>`).join('')}</select></label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gi">Invitar</button>' });
+      <label class="campo">Rol<select name="rol">${['admin', 'manager', 'booking'].filter((r) => r !== 'admin' || ME.rol === 'dueno').map((r) => `<option value="${r}">${esc(U.roles[r])}</option>`).join('')}</select></label><div id="ri"></div>
+      <p class="mut peq" style="margin:0">Si esa persona también toca, después de invitarla enlace su ficha de integrante (Integrantes → su ficha → «Enlazar a un usuario»). Así cobra como músico y por sus funciones.</p>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gi">Invitar</button>' });
+    detalleRolEn($('[name=rol]', md.el), $('#ri', md.el));
     $('#gi', md.el).onclick = (ev) => trabajando(ev.target, async () => { const d = Object.fromEntries($$('input[name],select[name]', md.el).map((i) => [i.name, i.value])); const r = await api('usuarios', { method: 'POST', body: d }); md.cerrar();
       modal('Invitación creada', `${r.enviado ? '<div class="aviso ok">Le mandamos la invitación por correo.</div>' : '<div class="aviso adv">Los correos no están activados. Pásele este enlace:</div>'}<label class="campo">Enlace (vence en 7 días)<input readonly value="${esc(r.enlace)}" onclick="this.select()"></label>`, { pie: '<button class="btn prim" data-cerrar>Listo</button>' }); vUsuarios(c); });
   };
   $$('[data-u]').forEach((b) => (b.onclick = () => { const u = U.usuarios.find((x) => x.id === Number(b.dataset.u));
-    const md = modal('Acceso de ' + u.nombre, `<label class="campo">Rol<select name="rol">${Object.entries(U.roles).filter(([k]) => k !== 'dueno' && (k !== 'admin' || ME.rol === 'dueno')).map(([k, t]) => `<option value="${k}"${u.rol === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><label class="chk"><input type="checkbox" name="activo" ${u.activo ? 'checked' : ''}> Tiene acceso</label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gu">Guardar</button>' });
+    const md = modal('Acceso de ' + u.nombre, `<label class="campo">Rol<select name="rol">${Object.entries(U.roles).filter(([k]) => k !== 'dueno' && !['cliente', 'promotor'].includes(k) && (k !== 'admin' || ME.rol === 'dueno')).map(([k, t]) => `<option value="${k}"${u.rol === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label><label class="chk"><input type="checkbox" name="activo" ${u.activo ? 'checked' : ''}> Tiene acceso</label>`, { pie: '<button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="gu">Guardar</button>' });
     $('#gu', md.el).onclick = (ev) => trabajando(ev.target, async () => { await api('usuarios/' + u.id, { method: 'PUT', body: { rol: $('select', md.el).value, activo: $('input[name=activo]', md.el).checked } }); md.cerrar(); toast('Guardado'); vUsuarios(c); }); }));
 }
 async function vCuenta(c) {
@@ -488,6 +500,33 @@ async function portal(sec, arg, arg2) {
     $('#f').onsubmit = (ev) => { ev.preventDefault(); trabajando($('button.prim', ev.target), async () => { await api('portal/perfil', { method: 'PUT', body: { ...datosDe(ev.target), ...(foto ? { foto } : {}) } }); toast('Guardado'); portal('perfil'); }); };
   }
 }
+
+
+// ventana con el enlace de invitación (copiar o WhatsApp)
+function avisoInvitacion(r, tel, texto) {
+  const n = String(tel || '').replace(/\D/g, ''), msg = `${texto} ${r.enlace}`;
+  const md = modal('Invitación lista', `<p style="margin:0">${r.enviado ? 'Se mandó por correo. También puede copiar el enlace:' : 'Mándele este enlace:'}</p><input readonly value="${esc(r.enlace)}" onclick="this.select()" style="height:40px;border:1px solid var(--borde2);border-radius:8px;padding:0 10px;width:100%">
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cp">Copiar enlace</button><a class="btn" style="background:#047857;border-color:#047857;color:#fff" target="_blank" rel="noopener" href="https://wa.me/${n}?text=${encodeURIComponent(msg)}">Enviar por WhatsApp</a></div>`, { pie: '<button class="btn prim" data-cerrar>Listo</button>' });
+  $('#cp', md.el).onclick = () => navigator.clipboard.writeText(r.enlace).then(() => toast('Enlace copiado'));
+}
+// ---------- direcciones: en EE. UU. calle, ciudad, estado y ZIP; en otros países la dirección corrida ----------
+const ESTADOS_US = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', PR: 'Puerto Rico', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming' };
+const esUS = (p) => ['us', 'usa', 'eeuu', 'ee uu', 'estados unidos', 'estados unidos de america', 'united states'].includes(String(p || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\./g, '').trim());
+function camposDireccion(o = {}) {
+  const v = (k) => esc(o?.[k] || '');
+  return `<div class="dir-bloque" style="display:flex;flex-direction:column;gap:12px">
+    <div class="fila"><label class="campo">País<input name="pais" list="paises-l" value="${v('pais')}" placeholder="República Dominicana, Estados Unidos…"><datalist id="paises-l"><option>República Dominicana</option><option>Estados Unidos</option><option>Puerto Rico</option><option>España</option><option>México</option><option>Colombia</option></datalist></label>
+      <label class="campo">Ciudad<input name="ciudad" value="${v('ciudad')}"></label></div>
+    <label class="campo"><span class="dir-et">Dirección</span><input name="direccion" value="${v('direccion')}"></label>
+    <div class="fila dir-us"><label class="campo">Estado<select name="estado_us"><option value="">—</option>${Object.entries(ESTADOS_US).map(([k, t]) => `<option value="${k}"${o?.estado_us === k ? ' selected' : ''}>${t} (${k})</option>`).join('')}</select></label>
+      <label class="campo">ZIP<input name="codigo_postal" inputmode="numeric" maxlength="10" value="${v('codigo_postal')}" placeholder="33101"></label></div></div>`;
+}
+function enlazarDireccion(root) {
+  const b = $('.dir-bloque', root); if (!b) return;
+  const p = $('[name=pais]', b), ver = () => { const us = esUS(p.value); $('.dir-us', b).hidden = !us; $('.dir-et', b).textContent = us ? 'Calle y número (Street address)' : 'Dirección completa (calle, número, sector)'; $('[name=direccion]', b).placeholder = us ? '1600 Collins Ave, Suite 200' : 'Av. Winston Churchill 10, Piantini'; if (!us) { $('[name=estado_us]', b).value = ''; $('[name=codigo_postal]', b).value = ''; } };
+  p.addEventListener('input', ver); ver();
+}
+const direccionTxt = (o) => (o ? (esUS(o.pais) ? [o.direccion, o.ciudad, [o.estado_us, o.codigo_postal].filter(Boolean).join(' '), 'Estados Unidos'] : [o.direccion, o.ciudad, o.pais]).filter(Boolean).join(', ') : '');
 
 // ---------- plataforma (superadmin) ----------
 async function plataforma(sec) {

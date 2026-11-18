@@ -8,9 +8,11 @@ export const ROLES = {
   musico: 'Músico',
   sonidista: 'Sonidista',
   promotor: 'Promotor',
+  cliente: 'Cliente',
 };
 export const ROLES_OFICINA = ['dueno', 'admin', 'manager', 'booking'];
 export const ROLES_PORTAL = ['musico', 'sonidista'];
+export const ROLES_CLIENTE = ['cliente'];
 export const ROLES_2FA = ['dueno', 'admin', 'manager'];
 
 export const PERMISOS_CAT = {
@@ -86,6 +88,7 @@ export const FABRICA = {
   musico: [],
   sonidista: [],
   promotor: [],
+  cliente: [],
 };
 
 // permisos efectivos de un rol en una empresa

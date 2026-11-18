@@ -11,10 +11,11 @@ import { rutasViajes } from './viajes.js';
 import { rutasRider } from './rider.js';
 import { rutasReportes, rutasPresupuesto } from './reportes.js';
 import { rutasComunicacion, accesoAdjunto } from './comunicacion.js';
+import { rutasExtras, accesoArchivoCliente } from './extras.js';
 import { estado2fa } from './nucleo.js';
 
 const LIM_IMG = 1_500_000, LIM_DOC = 4_000_000;
-const TIPOS_ARCHIVO = { logo_empresa: 'img', logo_banda: 'img', foto_musico: 'img', documento: 'doc', adjunto: 'doc' };
+const TIPOS_ARCHIVO = { logo_empresa: 'img', logo_banda: 'img', foto_musico: 'img', documento: 'doc', adjunto: 'doc', flyer: 'img', firma: 'img' };
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 
 async function cuentaEmpresa(db, e) {
@@ -49,7 +50,7 @@ async function api(req, env, url, ectx) {
     rol = m.rol;
   }
   user.rol = rol;
-  const limite = ROLES_PORTAL.includes(rol) ? INACTIVO_MS.portal : INACTIVO_MS.oficina;
+  const limite = ROLES_PORTAL.includes(rol) || rol === 'cliente' ? INACTIVO_MS.portal : INACTIVO_MS.oficina;
   const usoMs = s.uso ? Date.parse(s.uso) : null;
   if (usoMs && Date.now() - usoMs > limite) { await db.prepare('DELETE FROM sesiones WHERE token = ?').bind(token).run(); return err('Su sesión venció por inactividad. Vuelva a entrar.', 401); }
   if (!usoMs || Date.now() - usoMs > 60e3) ectx?.waitUntil?.(db.prepare('UPDATE sesiones SET uso = ? WHERE token = ?').bind(new Date().toISOString(), token).run().catch(() => {}));
@@ -78,7 +79,8 @@ async function api(req, env, url, ectx) {
 
   if (mod === 'me' && method === 'GET') {
     const empresas = (await db.prepare("SELECT e.id, e.nombre, m.rol FROM miembros m JOIN empresas e ON e.id = m.empresa_id WHERE m.usuario_id = ? AND m.activo = 1 AND e.estado = 'activo' ORDER BY e.nombre").bind(user.id).all()).results;
-    return json({ usuario: user, rol, rol_nombre: ROLES[rol], portal: ROLES_PORTAL.includes(rol), permisos: [...permisos], dos_pasos: await estado2fa(db, user.id),
+    const miMusico = ROLES_OFICINA.includes(rol) ? await db.prepare('SELECT id, nombre, tipo FROM musicos WHERE usuario_id = ? AND empresa_id = ? AND activo = 1').bind(user.id, empresa.id).first() : null;
+    return json({ usuario: user, rol, rol_nombre: ROLES[rol], portal: ROLES_PORTAL.includes(rol), cliente: rol === 'cliente', mi_musico: miMusico, permisos: [...permisos], dos_pasos: await estado2fa(db, user.id),
       empresa: { id: empresa.id, nombre: empresa.nombre, pais: empresa.pais, moneda_base: empresa.moneda_base, zona_horaria: empresa.zona_horaria, logo_url: empresa.logo_r2 ? '/api/archivo/' + encodeURIComponent(empresa.logo_r2) : null, ...est }, empresas });
   }
 
@@ -112,9 +114,10 @@ async function api(req, env, url, ectx) {
       const email = String(d.email || '').toLowerCase().trim();
       if (!emailOk(email)) return err('Correo no válido');
       if (!ROLES[d.rol] || d.rol === 'dueno') return err('Escoja un rol');
+      if (d.rol === 'cliente') return err('A los clientes se les da acceso desde su ficha en Clientes');
       if (['admin'].includes(d.rol) && rol !== 'dueno') return err('Solo el dueño puede invitar administradores', 403);
       const p = await db.prepare('SELECT usuarios FROM planes WHERE clave = ?').bind(empresa.plan).first();
-      if (p && p.usuarios != null) { const n = (await db.prepare("SELECT COUNT(*) n FROM miembros WHERE empresa_id = ? AND activo = 1 AND rol NOT IN ('musico','sonidista')").bind(empresa.id).first()).n; if (n >= p.usuarios && !ROLES_PORTAL.includes(d.rol)) return err(`Su plan permite ${p.usuarios} usuarios de oficina.`, 402); }
+      if (p && p.usuarios != null) { const n = (await db.prepare("SELECT COUNT(*) n FROM miembros WHERE empresa_id = ? AND activo = 1 AND rol NOT IN ('musico','sonidista','cliente')").bind(empresa.id).first()).n; if (n >= p.usuarios && !ROLES_PORTAL.includes(d.rol)) return err(`Su plan permite ${p.usuarios} usuarios de oficina.`, 402); }
       if (await db.prepare('SELECT 1 FROM miembros m JOIN usuarios u ON u.id = m.usuario_id WHERE m.empresa_id = ? AND u.email = ? AND m.activo = 1').bind(empresa.id, email).first()) return err('Esa persona ya tiene acceso');
       return invitar(L, { email, nombre: txt(d.nombre, 80), rol: d.rol });
     }
@@ -153,7 +156,7 @@ async function api(req, env, url, ectx) {
   if (mod === 'archivos' && method === 'POST') {
     const tipo = d.tipo, clase = TIPOS_ARCHIVO[tipo]; if (!clase) return err('Tipo de archivo no válido');
     const yo = ROLES_PORTAL.includes(rol);
-    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo || puede('finanzas.registrar') || puede('gastos.generales') || puede('nomina.pagar') || puede('viajes.editar') , adjunto: yo || puede('chat.usar') || puede('comunicados.enviar') }[tipo];
+    const ok = { logo_empresa: puede('empresa.editar'), logo_banda: puede('bandas.editar') || puede('bandas.crear'), foto_musico: puede('musicos.editar') || puede('musicos.crear') || yo, documento: puede('documentos.editar') || yo || puede('finanzas.registrar') || puede('gastos.generales') || puede('nomina.pagar') || puede('viajes.editar') , adjunto: yo || puede('chat.usar') || puede('comunicados.enviar') , flyer: rol === 'cliente' || puede('eventos.editar') || puede('eventos.crear'), firma: rol === 'cliente' }[tipo];
     if (!ok) return err('Su rol no tiene permiso para subir este archivo', 403);
     const m = /^data:([a-z/+.-]+);base64,(.+)$/i.exec(String(d.datos || '')); if (!m) return err('Archivo no válido');
     const mime = m[1].toLowerCase(), ext = MIME_EXT[mime];
@@ -186,6 +189,7 @@ async function api(req, env, url, ectx) {
       if (ok && esDoc) await auditar(ctx, 'documento_descargado', 'archivo', null, clave);
     }
     if (!ok && a.tipo === 'adjunto') ok = a.creado_por === user.id || (await accesoAdjunto(L, clave));
+    if (!ok && (a.tipo === 'flyer' || a.tipo === 'firma')) ok = a.creado_por === user.id || (await accesoArchivoCliente(L, clave, a.tipo));
     if (!ok) return err('Sin permiso', 403);
     const o = await env.ARCHIVOS.get(clave); if (!o) return err('No encontrado', 404);
     return new Response(o.body, { headers: { 'content-type': a.mime, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-disposition': a.mime === 'application/pdf' ? 'inline' : 'inline' } });
@@ -206,6 +210,8 @@ async function api(req, env, url, ectx) {
     return json((await db.prepare('SELECT a.accion, a.recurso, a.recurso_id, a.detalle, a.creado, u.nombre AS usuario FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = ? ORDER BY a.id DESC LIMIT 200').bind(empresa.id).all()).results);
   }
 
+  const rx = await rutasExtras(L);
+  if (rx) return rx;
   const rc = await rutasComunicacion(L);
   if (rc) return rc;
   const rp = (await rutasReportes(L)) || (await rutasPresupuesto(L));
